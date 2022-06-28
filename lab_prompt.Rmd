@@ -1,8 +1,20 @@
 ---
 title: 'Statistical Methods for Discrete Response, Time Series, and Panel Data (W271): Lab 2'
-geometry: margin=1in
+author: "Aastha, Ben, Don, and Eda"
+date: "06/24/2022"
 output:
-  github_document: default
+  pdf_document:
+    toc: yes
+    number_sections: yes
+    pandoc_args: --listings
+    includes:
+      in_header: preamble.tex
+  html_document: default
+  word_document:
+    toc: yes
+subtitle: U.C. Berkeley, MIDS, Summer 2022
+geometry: left=1cm,right=1cm,top=1cm,bottom=1.5cm
+
 ---
 
 # The Keeling Curve

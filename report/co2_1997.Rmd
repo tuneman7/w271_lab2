@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 ```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
 library(tidyverse)
 library(tsibble)
@@ -22,13 +27,7 @@ The data that we will analyze in this report is monthly data on the CO2 levels m
 
 The data is in units of "mole fraction", which according to the data source is "defined as the number of carbon dioxide molecules in a given number of molecules of air, after removal of water vapor. For example, 413 parts per million of CO2 (abbreviated as ppm) means that in every million molecules of (dry) air there are on average 413 CO2 molecules." The data that makes up our dataset was measured daily from Jan 1959 to Dec 1997, but in our dataset appears as an averaged mean per month in ppm units.
 
-Let's take a look at the data. In raw form, it appears as a matrix of doubles that represent the ppm measurements per month and year combination, as appears below. 
-
-```{r echo = FALSE, message = FALSE}
-head(co2)
-```
-
-We can cast this to a time series object in R and create some initial EDA plots that will allow us to better understand the data. Let's start by analyzing time series, histogram, auto-correlation function (ACF), and partial auto-correlation function (PACF) plots.
+Let's take a look at the data. In raw form, it appears as a matrix of doubles that represent the ppm measurements per month and year combination, as appears below. Let's create some initial EDA plots that will allow us to better understand the data. Let's start by analyzing time series, histogram, auto-correlation function (ACF), and partial auto-correlation function (PACF) plots.
 
 ```{r echo = FALSE, message = FALSE}
 co2_df <- tsibble::as_tsibble(co2)
@@ -66,7 +65,7 @@ The histogram shows that the CO2 values seem to range between 300 and 380 ppm an
 
 Let's take a closer look at the seasonality in the data. We'll start by creating a season plot and a subseries plot of the data.
 
-```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=5}
+```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=8}
 seasons <- ggseasonplot(x = co2, year.labels=TRUE, year.labels.left=TRUE) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
@@ -82,11 +81,12 @@ AAAAAA
 BBBBBB
 ")
 ```
+
 From these plots, we can see that the CO2 levels appear to increase from January through May, then decrease from June through October, hitting a low in October, and then increase again from November through end of the year. The source report does mention that plants and soil absorbing and emitting CO2 could influence these measurements. A possible explanation could be that, in the colder months, we can expect higher CO2 levels as plants die off, and in the warmer months, we can expect lower CO2 levels as plants thrive. Of course, there is variability across the Northern Hemisphere in what counts as "colder" months and when plants thrive - for example, Hawaiian "winter" is temperate and plants can grow year round, so this could explain why the seasonal variability is slight across the year. We can again see the trend of CO2 levels increasing year by year, but the seasonality effect seems constant year after year without a noticeable increase in the magnitude of the fluctuations across years, again supporting an additive model.
 
 We can confirm that our time series trend is increasing by removing our seasonality components and aggregating our data by year instead of month, as seen below.
 
-```{r echo = FALSE, message = FALSE, warning = FALSE}
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=3, fig.height=3}
 year_agg_plot <- co2_df %>%
   mutate(year = year(index)) %>%
   index_by(year) %>%
@@ -100,7 +100,7 @@ year_agg_plot
 
 We can also use both additive and multiplicative decomposition to remove both the trend and seasonal movements from our dataset and confirm that the variance is stationary. The results from these decompositions are plotted below.
 
-```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=5, fig.height=4}
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7, fig.height=5}
 co2_df <- co2_df %>%
   mutate(log_value = log(value))
 
@@ -113,11 +113,11 @@ dcmp_multi <- co2_df %>%
 decomp <- components(dcmp_add) %>% autoplot()
 residuals <- components(dcmp_add)%>%
   ACF(remainder) %>%
-  autoplot() + labs(title="Residuals additive decomposition")
+  autoplot() + labs(title="Additive residuals")
 log_decomp <- components(dcmp_multi) %>% autoplot()
 log_residuals <- components(dcmp_multi) %>%
   ACF(remainder) %>%
-  autoplot() + labs(title="Residuals of multiplicative decomposition")
+  autoplot() + labs(title="Multiplicative residuals")
 
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
@@ -129,6 +129,7 @@ Looking at the residual plots, the residuals on both appear stationary, meaning 
 Let's complete our EDA by running statistical tests to determine whether our model is stationary or non-stationary. We will run both the Augmented Dickey-Fuller (ADF) test and the Phillips Perron (PP) test to do this, under the following hypotheses:
 
 H0: Time series is non-stationary
+
 H1: Time series is stationary
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}

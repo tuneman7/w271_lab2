@@ -3,7 +3,13 @@ output:
   pdf_document: default
   html_document: default
 ---
-```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
+
+# Report from the Point of View of 1997 
+
+## Introduction
+
+## Exploratory Data Analysis
+```{r load packages, echo = FALSE, message = FALSE, warning=FALSE, warn = FALSE}
 library(tidyverse)
 library(tsibble)
 library(latex2exp)
@@ -122,7 +128,7 @@ log_residuals <- components(dcmp_multi) %>%
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
 
-From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears more stable, supporting the idea that this might actually be a multiplicative time series. 
+From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears a bit more stable, supporting the idea that this might actually be a multiplicative time series. In the next section we should take a look at applying a log transform on our series prior to modeling.
 
 Looking at the residual plots, the residuals on both appear stationary, meaning that the decomposition methods we are using was able to eliminate deterministic components from the time series. However, they do not appear to be white noise, meaning that there is still correlation in the data.
 
@@ -138,10 +144,216 @@ pp.test(co2)
 ```
 Based on the ADF and PP tests, we can reject the null hypothesis that the time series is non-stationary. This is surprising as from our visual analysis of the time series plots, the time series does not appear to be stationary as the mean trends upwards. Because we know that both the ADF and PP tests have low power, we will move forward with the assumption that this time series is non-stationary based on our visual EDA.
 
-## (3 points) Task 2a: Linear time trend model
+## Modeling
 
-Fit a linear time trend model to the `co2` series, and examine the characteristics of the residuals. Compare this to a quadratic time trend model. Discuss whether a logarithmic transformation of the data would be appropriate. Fit a polynomial time trend model that incorporates seasonal dummy variables, and use this model to generate forecasts to the year 2020. 
+Let's start by creating two linear models, one fit on our CO2 data and one fit on the log transform of our CO2 data. Since in our EDA we did notice that the fluctuations within the seasonality of the time series seem to grow slightly larger over time, indicating a potentially multiplicative series, we want to try out this log transform to see if it reduces variance in our model and leads to smaller residuals.
 
-> Would be appropriate - look at week 7, because we think this is additive we should not take the logarithm
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_linear <- co2_df %>%
+  model(trend_model = TSLM(value ~ trend()))
 
-> https://github.com/mids-271/summer_22_central/blob/master/Live_session_and_solutions/LS_7_Solutions/LS-7-Solutions.pdf - pg 12 & 13
+fit_linear_log <- co2_df %>%
+  model(trend_model = TSLM(log_value ~ trend()))
+
+fit_linear %>% report()
+fit_linear_log %>% report()
+```
+
+We can see from the output here that the R-squared values on both models are high and the input coefficients are highly significant on both. We will also plot the models on top of our data.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_linear_plot <- augment(fit_linear)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Linear Model / Mean $CO_2$ Levels)')) 
+
+fit_linear_log_plot <- augment(fit_linear_log)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = log_value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Log Linear Model / Log Mean $CO_2$ Levels)')) 
+
+grid.arrange(fit_linear_plot, fit_linear_log_plot, nrow = 1, ncol = 2)
+```
+From these plots, both models seem to do a similar job fitting the data but fail to account for any of the seasonal "waves". Next, let's examine the model residuals.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_linear %>% gg_tsresiduals() + labs(title = "Linear Residuals") 
+fit_linear_log %>% gg_tsresiduals() + labs(title = "Log Linear Residuals") 
+```
+The residuals don't look much different here between the linear and log linear models, signaling that a log transformation is unnecessary for the linear model. In both models, the ACFs show a periodic oscillating pattern which signals that something is missing from our model. Based on our EDA, this is most likely the seasonality that we discussed but did not account for in this model. Additionally, the residuals appear somewhat normally distributed for both models. Let's run a Ljung Box test to understand whether we have white noise residuals, under the following hypotheses:
+
+H0: Data are independently distributed.
+
+H1: Data are not independently distributed.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+linear_residuals <- fit_linear %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+linear_log_residuals <- fit_linear_log %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+Box.test(linear_residuals, lag = 1, type = "Ljung-Box")
+Box.test(linear_residuals, lag = 10, type = "Ljung-Box")
+Box.test(linear_log_residuals, lag = 1, type = "Ljung-Box")
+Box.test(linear_log_residuals, lag = 10, type = "Ljung-Box")
+```
+
+Based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely the seasonality).
+
+Let's repeat this process with a quadratic trend model.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_quadratic <- co2_df %>%
+   model(trend_model = TSLM(value ~ trend()+I(trend()^2))) 
+ 
+fit_quadratic_log <- co2_df %>%
+   model(trend_model = TSLM(log_value ~ trend()+I(trend()^2))) 
+
+fit_quadratic %>% report()
+fit_quadratic_log %>% report()
+```
+
+We can see from the output here that the R-squared values on both models are high and the input coefficients are highly significant on both. We will also plot the models on top of our data.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_quadratic_plot <- augment(fit_quadratic)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Quadratic Model / Mean $CO_2$ Levels)')) 
+
+fit_quadratic_log_plot <- augment(fit_quadratic_log)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = log_value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Log Quadratic Model / Log Mean $CO_2$ Levels)')) 
+
+grid.arrange(fit_quadratic_plot, fit_quadratic_log_plot, nrow = 1, ncol = 2)
+```
+
+From these plots, both models seem to do a similar job fitting the data. Next, let's examine the model residuals.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_quadratic %>% gg_tsresiduals() + labs(title = "Quadratic Residuals") 
+fit_quadratic_log %>% gg_tsresiduals() + labs(title = "Log Quadratic Residuals") 
+```
+
+The residuals don't look much different here between both models, signaling that a log transformation is unnecessary for the quadratic model as well. In both models, the ACFs show the same periodic oscillating pattern which signals that the seasonality is likely missing from our model. The residuals also appear somewhat normally distributed for both models. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before:
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+quadratic_residuals <- fit_quadratic %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+quadratic_log_residuals <- fit_quadratic_log %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+Box.test(quadratic_residuals, lag = 1, type = "Ljung-Box")
+Box.test(quadratic_residuals, lag = 10, type = "Ljung-Box")
+Box.test(quadratic_log_residuals, lag = 1, type = "Ljung-Box")
+Box.test(quadratic_log_residuals, lag = 10, type = "Ljung-Box")
+```
+
+As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely again the seasonality).
+
+Since the log transforms don't appear to reduce any of the variance in our models, I am going to compare the linear model directly with the quadratic model on non-transformed data. Our previous analysis shows that both models are behaving similarly, so I am just going to compare the two using the Bayesian Information Criteria (BIC) as my metric.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+glance(fit_linear) %>% 
+  select(BIC)
+
+glance(fit_quadratic) %>% 
+  select(BIC)
+```
+
+The quadratic model has a lower BIC, so I will move forward using the quadratic model. Our next step is to fit a polynomial model that incorporates seasonal dummy variables, which will hopefully account for some of the variance that we failed to capture in our previous models. We'll create models using both the log transform and the normal CO2 values, although it has appeared from our past models that the log transform does not seem to account for much, if any, variance in our data.
+
+```{r}
+fit_quadratic_season <- co2_df %>%
+  model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
+
+fit_quadratic_log_season <- co2_df %>%
+  model(trend_model = TSLM(log_value ~ trend() + I(trend()^2) + season())) 
+
+fit_quadratic_season %>% report()
+fit_quadratic_log_season %>% report()
+```
+Just from this summary, we can see that the R-squared values are slightly higher on both of these seasonal models than either the linear or quadratic models. We can also see that all the input coefficients are highly significant. Let's plot our models next.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_quadratic_season_plot <- augment(fit_quadratic_season)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Quadratic Seasonal Model / Mean $CO_2$ Levels)')) 
+
+fit_quadratic_log_season_plot <- augment(fit_quadratic_log_season)%>%
+  ggplot(aes(x = index)) +
+  geom_line(aes(y = log_value, colour = "Data")) +
+  geom_line(aes(y = .fitted, colour = "Fitted")) +
+  labs(y = "Time", title = TeX(r'(Log Quadratic Seasonal Model / Log Mean $CO_2$ Levels)')) 
+
+grid.arrange(fit_quadratic_season_plot, fit_quadratic_log_season_plot, nrow = 1, ncol = 2)
+```
+
+From these plots, both models seem to do a similar job fitting the data and, unlike the previous models we've seen, actually account for the seasonal "waves" in our plot and track them pretty closely. Next, let's examine the model residuals.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit_quadratic_season %>% gg_tsresiduals() + labs(title = "Quadratic Season Residuals") 
+fit_quadratic_log_season %>% gg_tsresiduals() + labs(title = "Log Quadratic Season Residuals") 
+```
+
+The residuals again don't look much different here between both models, signaling that a log transformation is unnecessary for this seasonal quadratic model as well. In both models, the ACFs now shows highly significant and slowly declining lags, unlike the ACF plots on the previous models which showed an oscillating trend that was likely related to seasonality variance that our latest models are now capturing. The residuals appear somewhat normally distributed for both models. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before:
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+quadratic_season_residuals <- fit_quadratic_season %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+quadratic_log_season_residuals <- fit_quadratic_log_season %>%
+  augment() %>%
+  select(.resid) %>%
+  as.ts()
+
+Box.test(quadratic_season_residuals, lag = 1, type = "Ljung-Box")
+Box.test(quadratic_season_residuals, lag = 10, type = "Ljung-Box")
+Box.test(quadratic_log_season_residuals, lag = 1, type = "Ljung-Box")
+Box.test(quadratic_log_season_residuals, lag = 10, type = "Ljung-Box")
+```
+
+As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data. This is surprising as our residuals are quite small, especially in comparison to our previous models. Let's compare the BIC of the quadratic seasonal model without the log transform to our previous BICs.
+
+Let's compare the BIC of this model against the pure linear and quadratic models without seasonal components.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+glance(fit_quadratic_season) %>% 
+  select(BIC)
+```
+
+The BIC for our quadratic seasonal model is much smaller than the BICs for either our linear or quadratic model, and by this criteria is our best model that we have fit so far. Let's use this model to generate forecasts to the year 2020.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+future_df <- new_data(co2_df, n=23 * 12)
+
+predictions <- fit_quadratic_season %>%
+  forecast(new_data = future_df)
+
+fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot(co2_df)
+```
+
+We can see that these predictions continue the trend and seasonal fluctuations that we noticed in our data.
+
+# TODO: Check CLM assumptions? https://github.com/mids-271/summer_22_central/blob/master/Live_session_and_solutions/LS_7_Solutions/LS-7-Solutions.pdf

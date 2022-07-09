@@ -360,7 +360,7 @@ plot.ts(residuals(trModel))
 ```
 Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending.
 
-Finally we run an ADF and PP test on the residuals, and we again, see that the nully hypothesis of non-trending can be ignored.
+Finally we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend stationary can be ignored.
 
 
 ```{r}

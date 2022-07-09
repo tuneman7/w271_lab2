@@ -2,6 +2,7 @@
 output:
   pdf_document: default
   html_document: default
+geometry: left=1cm,right=1cm,top=1cm,bottom=1.5cm
 ---
 ```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
 library(tidyverse)
@@ -351,29 +352,22 @@ This contradicts our visual EDA, which shows a changing mean, given the strong u
 
 We should note that the tests above are testing whether the time series are difference stationary.  We apply a linear model and then graph its residuals.
 
-```{r}
+```{r echo = FALSE, message = FALSE}
 library(lmtest)
 
 trModel <- lm(co2_present_ts ~ c(1:length(co2_present_ts)))
 plot.ts(residuals(trModel))
 
 ```
+
 Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending.
 
-Finally we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
+Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
 
-
-```{r}
+```{r echo = FALSE, message = FALSE}
 
 adf.test(trModel$residuals, alternative="stationary", k=5)
 pp.test(trModel$residuals, alternative="stationary")
 
 ```
 
-## (3 points) Task 2a: Linear time trend model
-
-Fit a linear time trend model to the `co2` series, and examine the characteristics of the residuals. Compare this to a quadratic time trend model. Discuss whether a logarithmic transformation of the data would be appropriate. Fit a polynomial time trend model that incorporates seasonal dummy variables, and use this model to generate forecasts to the year 2020. 
-
-> Would be appropriate - look at week 7, because we think this is additive we should not take the logarithm
-
-> https://github.com/mids-271/summer_22_central/blob/master/Live_session_and_solutions/LS_7_Solutions/LS-7-Solutions.pdf - pg 12 & 13

@@ -97,12 +97,13 @@ DDDDDCCCC
 ```
 As with the "1997" data set, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
 
-The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  This may be interpenetrated as "steeper" or more accelerated trend.
+The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" data set contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
 
 The PACF has a large positive spike at lag 1, followed by a smaller negative spike at log 2, then oscillates between positive and negative lags with progressively lower levels of significance.
 
 Our histogram of has no values lower than 365, or nigher than 421, and that these values are not normally distributed.
 
+In order to better understand the differences between these two datasets we examine them side by side.
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -115,20 +116,20 @@ BBBBBDDDD
 
 ```
 
-```{r}
-pacf_present
-```
+When we start looking graphing the two data sets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
 
+We take only the last 293 months of the "1997" data set and graph it on the same space as the "present" data set.
 
 ```{r echo = FALSE, message = FALSE}
 
 
 co2_df <-
-  as.data.frame(co2_ts) %>%
+  co2_ts %>%
   mutate(id = row_number())  %>%
   filter(id > 175) %>%
   mutate(id = row_number()) %>%
-  dplyr::select("id","value")
+  dplyr::select("id","value")  %>%
+  as_tsibble()
   #dplyr::select("id","1972 through 1997")
 
 co2_present_df <-
@@ -137,9 +138,19 @@ co2_present_df <-
   #mutate("1997 through present"=value) %>%
   dplyr::select("id","value")
 
-  co2_df_lm <- lm()
+min_1997 = min(co2_df[,2], na.rm=T)
+min_present = min(co2_present_df[,2], na.rm=T)
 
- 
+max_1997 = max(co2_df[,2], na.rm=T)
+max_present = max(co2_present_df[,2], na.rm=T)
+
+delta_1997 = max_1997 - min_1997
+delta_present = max_present - min_present
+
+delta_between_periods = delta_present - delta_1997
+
+
+
 ochart_1 <- ggplot() +
    geom_line(data=co2_df,
              aes(x=id,y=value, color="1973 through 1997"),
@@ -156,87 +167,152 @@ ochart_1 <- ggplot() +
                               '1997 through present'='#eb3434'))
 ochart_1
 
+
+
 ```
 
+In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measuring for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
 
+We apply the same "parsing" of the original "1997" data set and compare the parsed dataset's ACF and PACF graphs to those of the "present" data set.
 
 ```{r echo = FALSE, message = FALSE}
+
+acf_1997 <- ggAcf(co2_df$value, lag.max=(15*12)) + labs(title="ACF 1973 through 1997")
+pacf_1997 <- ggPacf(co2_df$value, lag.max=(15*12)) + labs(title="PACF 1973 through 1997")
 
    (acf_1997 | acf_present) /
    (pacf_1997 | pacf_present)  +
   plot_annotation(
-      title    = 'Histogram Plot Comparison',
+      title    = 'ACF and PACF comparison',
     #  subtitle = 'Could be Random Walk',
-      tag_levels = 'A') & 
-    labs(x = NULL, y = 'Y Value') 
+      tag_levels = 'A')  
 
 ```
 
+Parsing the "1997" data set to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" data set does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" data set.
 
+Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
 
-As we can see above, the data seems to follow a clear and increasing trend, with a distinct seasonal pattern that appears as "waves" that we would like to further analyze. The magnitude of the fluctuations do not appear to vary with the time series level, so in terms of decomposition, an additive model would likely fit this series best. The time series does not appear stationary from this plot, as the mean does not appear constant and in fact appears to increase over time, but the variance appears to be constant.
+```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=5, warning=FALSE}
 
-The ACF starts out close to 1 and declines slowly over time, losing significance but staying mostly positive and above the significance line until around lag 140. This slow decline in ACF is what we should see in a time series with a pronounced trend effect, and tracks with what we noticed in the previous time series plot. There appear to be "waves" in the ACF plot similar to the "waves" we also noticed in the time series plot, indicating that the there is a seasonal or cyclic component to our data. Thinking ahead to our modeling, the ACF seems to indicate an autoregressive component in our data generating process, as it declines slowly over time.
-
-The PACF starts out with a single significant positive spike at lag 1, followed by a (relatively smaller) significant negative spike at lag 2, with oscillating clusters of positive and negative lags with much lower levels of significance as the lag number increases. Thinking ahead to our modeling, the PACF seems to indicate an moving average component in our data generating process, as it oscillates between positive and negative over time.
-
-The histogram shows that the CO2 values seem to range between 300 and 380 ppm and do not appear normally distributed, with most values in between these two ranges. 
-
-Let's take a closer look at the seasonality in the data. We'll start by creating a season plot and a subseries plot of the data.
-
-```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=8}
-
-seasons_1997 <- ggseasonplot(x = co2, year.labels=TRUE, year.labels.left=TRUE) +
-  ylab(TeX(r'($CO_2$ Parts per Million)')) +
-  ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
-
-co2_present_no_log <- co2_present %>%
+df_3_year_season_org <- co2_ts %>%
+  filter(year(index)>= 1993)%>%
   select("index","value")
 
-seasons_present <- ggseasonplot(x = as.ts(co2_present_no_log), year.labels=TRUE, year.labels.left=TRUE) +
+co2_present_no_log <- co2_present %>%
+  filter(year(index)>= 2017)%>%
+  select("index","value")
+
+combined_no_log_latest <- bind_rows(
+  df_3_year_season_org,  
+  co2_present_no_log
+)
+
+seasons_present <- ggseasonplot(x = as.ts(combined_no_log_latest), year.labels=TRUE, year.labels.left=TRUE) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
 
 
-subseries <- ggsubseriesplot(x = as.ts(co2_present_no_log)) +
-  ylab(TeX(r'($CO_2$ Parts per Million)')) +
-  ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$)'))
+seasons_present
 
-seasons_present + subseries + plot_layout(design = "
-AAAAAA
-AAAAAA
-AAAAAA
-BBBBBB
+```
+
+In the plot above we look at the last 5 years in the "1997" data set and the last 5 years of the "present" data set.  
+
+What we are trying to ascertain is if the seasonality has become more extreme.  It is difficult to ascertain if the seasonality has become more extreme based on the graph above.  
+
+We next compare the two subseries graphs looking at each data set.
+
+
+```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=4, warning=FALSE}
+
+
+co2_df_ts <-
+  co2_ts %>%
+  mutate(id = row_number())  %>%
+  filter(id > 175) %>%
+  mutate(id = row_number()) %>%
+  dplyr::select("index","value")  %>%
+  as_tsibble()
+
+subseries_1997 <- ggsubseriesplot(x = as.ts(co2_df_ts)) +
+  ylab(TeX(r'($CO_2$ Parts per Million)')) +
+  ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$ 1973 through 1997)'))
+
+subseries_present <- ggsubseriesplot(x = as.ts(co2_present_no_log)) +
+  ylab(TeX(r'($CO_2$ Parts per Million)')) +
+  ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$ 1998 through 2022)'))
+
+
+subseries_1997 + subseries_present + plot_layout(design = "
+AAAAA
+BBBBB
 ")
 
+
 ```
 
-From these plots, we can see that the CO2 levels appear to increase from January through May, then decrease from June through October, hitting a low in October, and then increase again from November through end of the year. The source report does mention that plants and soil absorbing and emitting CO2 could influence these measurements. A possible explanation could be that, in the colder months, we can expect higher CO2 levels as plants die off, and in the warmer months, we can expect lower CO2 levels as plants thrive. Of course, there is variability across the Northern Hemisphere in what counts as "colder" months and when plants thrive - for example, Hawaiian "winter" is temperate and plants can grow year round, so this could explain why the seasonal variability is slight across the year. We can again see the trend of CO2 levels increasing year by year, but the seasonality effect seems constant year after year without a noticeable increase in the magnitude of the fluctuations across years, again supporting an additive model.
+With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present data set than in the one ending in 1997.
 
-We can confirm that our time series trend is increasing by removing our seasonality components and aggregating our data by year instead of month, as seen below.
+That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second data set.
 
-```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=3, fig.height=3}
-year_agg_plot <- co2_ts %>%
-  mutate(year = year(index)) %>%
+We now remove the seasonal fluctuations in both data sets and graph the increase in atmospheric CO2 PPM.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=3}
+
+co2_df <-
+  co2_ts %>%
+  mutate(id = row_number())  %>%
+  filter(id > 175) %>%
+  mutate(year = year(index))  %>%
   index_by(year) %>%
-  summarise(avg_value = sum(value)) %>%
-  ggplot(aes(x = year, y = avg_value)) +
-  geom_line() +
-  labs(title = TeX(r'(Annual Mean $CO_2$ Levels)'), y = TeX(r'($CO_2$ Parts per Million)'), x = "Year") 
+  summarise(avg_value = (sum(value)/12)) %>%  
+  mutate(id = row_number()) %>%
+  filter(id > 1 ) %>%  
+  dplyr::select("id","avg_value")
+  #dplyr::select("id","1972 through 1997")
 
-year_agg_plot
+co2_present_df <- co2_present %>%
+  mutate(year = year(index))  %>%
+  index_by(year) %>%
+  summarise(avg_value = (sum(value)/12)) %>%  
+  mutate(id = row_number())  %>%
+  filter(id <= 24) %>%  
+  dplyr::select("id","avg_value")
+
+
+ochart_2 <- ggplot() +
+   geom_line(data=co2_df,
+             aes(x=id,y=avg_value, color="1973 through 1997"),
+             size=1.2) +
+   geom_line(data=co2_present_df,
+             aes(x=id,y=avg_value, color="1997 through present"),
+             size=1.2) +
+  labs(x = "Months",
+       y = TeX(r'($CO_2$ parts per million)'),
+       title="293 month comparison: 1973 through 1997, and 1998 through present.",
+       subtitle = "Smoothed") +
+     scale_color_manual(name='Periods',
+                     breaks=c('1973 through 1997', '1997 through present'),
+                     values=c('1973 through 1997'= '#ebcc34' , 
+                              '1997 through present'='#eb3434'))
+ochart_2
+
+
 ```
 
-We can also use both additive and multiplicative decomposition to remove both the trend and seasonal movements from our dataset and confirm that the variance is stationary. The results from these decompositions are plotted below.
+
+We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our data set to confirm that the 
+
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7, fig.height=5}
-co2_ts <- co2_ts %>%
+co2_present <- co2_present %>%
   mutate(log_value = log(value))
 
-dcmp_add <- co2_ts %>%
+dcmp_add <- co2_present %>%
   model(stl = STL(value))
 
-dcmp_multi <- co2_ts %>%
+dcmp_multi <- co2_present %>%
  model(stl = STL(log_value))
 
 decomp <- components(dcmp_add) %>% autoplot()

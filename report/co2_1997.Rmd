@@ -157,6 +157,8 @@ Based on the ADF and PP tests, we can reject the null hypothesis that the time s
 
 ## Modeling
 
+### Linear Modeling
+
 Let's start by creating two linear models, one fit on our CO2 data and one fit on the log transform of our CO2 data. Since in our EDA we did notice that the fluctuations within the seasonality of the time series seem to grow slightly larger over time, indicating a potentially multiplicative series, we want to try out this log transform to see if it reduces variance in our model and leads to smaller residuals.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
@@ -368,3 +370,91 @@ fit_quadratic_season %>%
 We can see that these predictions continue the trend and seasonal fluctuations that we noticed in our data.
 
 # TODO: Check CLM assumptions? https://github.com/mids-271/summer_22_central/blob/master/Live_session_and_solutions/LS_7_Solutions/LS-7-Solutions.pdf
+
+###ARIMA Modeling
+
+Now, let's choose an ARIMA model to fit to the CO2 data. Recall that our EDA indicated that the CO2 data had the following characteristics: * non-stationary data series, 
+* slowly decaying ACF plot, indicative of an AR process
+* oscillating PCAF plot, indicative of an MA process
+* seasonal data
+
+In order to transform the data into a stationary series, we can start by applying a first-order difference to the series. 
+
+```{r}
+
+#first-order difference
+first_diff <- co2_df %>%
+  mutate(diff_co2 = difference(value)) 
+
+co2_df %>%
+gg_tsdisplay(difference(value),
+               plot_type='partial', lag=36) +
+  labs(title="First-order differenced", y="")
+```
+Based on the trend plot, the data seems to stabilize around a mean of -0.5, and it appears to have a constant variance, suggesting that the data only needs a first-order difference. The ACF plot continues to decay gradually but the oscillating behavior persists here. This indicates that the seasonal pattern is strong and stable after a first-order difference. As a result, we will want to use a seasonal difference in addition to this first difference. Since the seasonal behavior repeats every year, we will set m = 12, meaning the seasonal pattern repeats once every twelve months.
+
+```{r}
+#seasonally differenced
+co2_s_diff <- co2_df %>%
+  mutate(sdiff_co2 = difference(value, 12)) 
+
+co2_s_diff
+
+#plots for seasonal differencing
+co2_df  %>%
+gg_tsdisplay(difference(value, 12),
+               plot_type='partial', lag=36) +
+  labs(title="Seasonally differenced", y="")
+
+```
+
+On its own, seasonal differencing does not appear to make the data stationary. However, based on the ACF plot, we can confirm that the seasonal differencing either removes or significantly reduces the oscillation as it does not seem apparent anymore. As a result, we can conclude that we need both a first difference and a seasonal difference on the series. We can confirm these observations using the following unit root tests. We will first use the  Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test under the following hypothesis:
+
+H0: The data are stationary
+HA: The data are not stationary
+
+```{r}
+#unit root tests
+
+co2_df %>%
+  features(value, unitroot_kpss)
+
+first_diff %>%
+  features(diff_co2, unitroot_kpss)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_kpss )
+
+```
+
+We can interpret the tests in the following manner:
+* For the undifferenced data, the test statistic (7.81) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+* For the first differenced data, the p-value is greater than 0.1, indicating the test fails to reject the null hypothesis. That is, the data are stationary.
+* For the seasonally differenced data, the test statistic (1.94) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+Thus, we can conclude that we need both a first difference and a seasonal difference. But, how many differences do we need? To confirm that we are applying the appropriate amount of differences, we can use the following:
+
+```{r}
+
+#confirm the number of differences needed in the data
+co2_df %>%
+  features(value, unitroot_ndiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_ndiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_ndiffs)
+
+#test need for seasonal differencing; indicating one seasonal difference is required
+
+co2_df %>%
+  features(value, unitroot_nsdiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_nsdiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_nsdiffs)
+```
+
+Here we can see that once we apply a first difference and a seasonal difference, the test returns 0, indicating no additional differences are required. It is important that we correctly identify the correct number of differences as we could potentially introduce false dynamics or autocorrelations into the time series.

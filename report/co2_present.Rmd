@@ -26,11 +26,11 @@ knitr::opts_chunk$set(dpi=1000)
 
 ## (1 point) Task 0b: Introduction 
 
-We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the data set from 1958 until 1997 yielded.
+We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
 
 We assume that the collection process for both datasets is identical.
 
-It is worth noting that the "present" data set contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
+It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
 
 ## (3 points) Task 1b: Create a modern data pipeline for Mona Loa CO2 data.
 
@@ -76,7 +76,8 @@ plot_present <- co2_present %>%
   aes(x=index, y=value) + 
   geom_line(color = 'steelblue') +
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$ 1998 through Present)'),
+    title = TeX(r'(Monthly Mean $CO_2$)'),
+    subtitle = " 1998 through Present",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
   )
@@ -95,9 +96,10 @@ DDDDDCCCC
 ")
 
 ```
-As with the "1997" data set, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
 
-The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" data set contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
+As with the "1997" dataset, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
+
+The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" dataset contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
 
 The PACF has a large positive spike at lag 1, followed by a smaller negative spike at log 2, then oscillates between positive and negative lags with progressively lower levels of significance.
 
@@ -116,9 +118,9 @@ BBBBBDDDD
 
 ```
 
-When we start looking graphing the two data sets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
+When we start looking graphing the two datasets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
 
-We take only the last 293 months of the "1997" data set and graph it on the same space as the "present" data set.
+We take only the last 293 months of the "1997" dataset and graph it on the same space as the "present" dataset.
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -171,9 +173,9 @@ ochart_1
 
 ```
 
-In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measuring for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
+In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measurement for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
 
-We apply the same "parsing" of the original "1997" data set and compare the parsed dataset's ACF and PACF graphs to those of the "present" data set.
+We apply the same "parsing" of the original "1997" dataset and compare the parsed dataset's ACF and PACF graphs to those of the "present" dataset.
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -189,7 +191,7 @@ pacf_1997 <- ggPacf(co2_df$value, lag.max=(15*12)) + labs(title="PACF 1973 throu
 
 ```
 
-Parsing the "1997" data set to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" data set does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" data set.
+Parsing the "1997" dataset to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" dataset does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" dataset.
 
 Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
 
@@ -217,11 +219,11 @@ seasons_present
 
 ```
 
-In the plot above we look at the last 5 years in the "1997" data set and the last 5 years of the "present" data set.  
+In the plot above we look at the last 5 years in the "1997" dataset and the last 5 years of the "present" dataset.  
 
 What we are trying to ascertain is if the seasonality has become more extreme.  It is difficult to ascertain if the seasonality has become more extreme based on the graph above.  
 
-We next compare the two subseries graphs looking at each data set.
+We next compare the two subseries graphs looking at each dataset.
 
 
 ```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=4, warning=FALSE}
@@ -252,11 +254,11 @@ BBBBB
 
 ```
 
-With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present data set than in the one ending in 1997.
+With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present dataset than in the one ending in 1997.
 
-That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second data set.
+That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second dataset.
 
-We now remove the seasonal fluctuations in both data sets and graph the increase in atmospheric CO2 PPM.
+We now remove the seasonal fluctuations in both datasets and graph the increase in atmospheric CO2 PPM.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=3}
 
@@ -302,7 +304,7 @@ ochart_2
 ```
 
 
-We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our data set to confirm that the 
+We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our dataset to confirm that the 
 
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7.5, fig.height=6}
@@ -333,6 +335,10 @@ The multiplicative "season_year" decomposition graph is stable, and not visibly 
 
 Both residuals plots, again, show our time series as stationary, but not white noise.  This means correlation in the data still exists.
 
+Next we run the ADF test, as well as the PP test to see if the time series is stationary.
+
+H0: The data are not stationary
+HA: The data are stationary
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 
@@ -364,6 +370,10 @@ Graphing the residuals appears to show a mean reverting process.  That is to say
 
 Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
 
+H0: The data are not stationary
+HA: The data are stationary
+
+
 ```{r echo = FALSE, message = FALSE}
 
 adf.test(trModel$residuals, alternative="stationary", k=5)
@@ -371,3 +381,102 @@ pp.test(trModel$residuals, alternative="stationary")
 
 ```
 
+Despite the fact that the ADF and PP tests indicate the data series is stationary, our visual analysis of this data set suggests that it is non-stationary as its mean is increasing over time.  We will ignore the ADF and PP test results as they can sometimes be of low power.
+
+## (1 point) Task 2b: Compare linear model forecasts against realized CO2
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+future_df <- new_data(co2_ts, n=23 * 12)
+
+fit_quadratic <- co2_ts %>%
+   model(trend_model = TSLM(value ~ trend()+I(trend()^2))) 
+
+fit_quadratic_season <- co2_ts %>%
+  model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
+
+lm_prediction_based_on_1997_data <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "Quadratic Model w/ Trend & Seasonal Effects",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+data_and_lm_prediction_overlay <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot(co2_present) +  
+  labs(
+    title = TeX(r'(Monthly Mean $CO_2$)'),
+    subtitle = "(Series, with Linear Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | lm_prediction_based_on_1997_data) /
+  data_and_lm_prediction_overlay
+
+```
+
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting linear model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
+
+We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
+
+The linear model is very accurate.
+
+## (1 point) Task 3b: Compare ARIMA models forecasts against realized CO2  
+
+
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+
+future_d <- new_data(co2_ts, n=23 * 12)
+
+data_and_arima_prediction_overlay <- co2_ts %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot(co2_present)  +
+  labs(
+    title = TeX(r'(Monthly Mean $CO_2$)'),
+    subtitle = "(Series, with ARIMA Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+arima_prediction_based_on_1997_data<-co2_ts %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "(ARIMA Model w/ Trend & Seasonal Effects)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | arima_prediction_based_on_1997_data) /
+  data_and_arima_prediction_overlay
+#plot_present
+#arima_prediction_based_on_1997_data
+#data_and_arima_prediction_overlay
+
+```
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting ARIMA model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  The overlay shows a divergence between predicted ARIMA values and the actual trend.  
+
+We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
+
+The linear model does not predict as accurately as the linear model.
+
+To demonstrate this we graph both on top of one another below.
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+data_and_lm_prediction_overlay / 
+  data_and_arima_prediction_overlay
+
+```

@@ -26,11 +26,11 @@ knitr::opts_chunk$set(dpi=1000)
 
 ## (1 point) Task 0b: Introduction 
 
-We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the data set from 1958 until 1997 yielded.
+We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
 
 We assume that the collection process for both datasets is identical.
 
-It is worth noting that the "present" data set contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
+It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
 
 ## (3 points) Task 1b: Create a modern data pipeline for Mona Loa CO2 data.
 
@@ -96,9 +96,9 @@ DDDDDCCCC
 ")
 
 ```
-As with the "1997" data set, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
+As with the "1997" dataset, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
 
-The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" data set contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
+The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" dataset contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
 
 The PACF has a large positive spike at lag 1, followed by a smaller negative spike at log 2, then oscillates between positive and negative lags with progressively lower levels of significance.
 
@@ -117,9 +117,9 @@ BBBBBDDDD
 
 ```
 
-When we start looking graphing the two data sets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
+When we start looking graphing the two datasets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
 
-We take only the last 293 months of the "1997" data set and graph it on the same space as the "present" data set.
+We take only the last 293 months of the "1997" dataset and graph it on the same space as the "present" dataset.
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -172,9 +172,9 @@ ochart_1
 
 ```
 
-In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measuring for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
+In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measurement for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
 
-We apply the same "parsing" of the original "1997" data set and compare the parsed dataset's ACF and PACF graphs to those of the "present" data set.
+We apply the same "parsing" of the original "1997" dataset and compare the parsed dataset's ACF and PACF graphs to those of the "present" dataset.
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -190,7 +190,7 @@ pacf_1997 <- ggPacf(co2_df$value, lag.max=(15*12)) + labs(title="PACF 1973 throu
 
 ```
 
-Parsing the "1997" data set to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" data set does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" data set.
+Parsing the "1997" dataset to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" dataset does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" dataset.
 
 Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
 
@@ -218,11 +218,11 @@ seasons_present
 
 ```
 
-In the plot above we look at the last 5 years in the "1997" data set and the last 5 years of the "present" data set.  
+In the plot above we look at the last 5 years in the "1997" dataset and the last 5 years of the "present" dataset.  
 
 What we are trying to ascertain is if the seasonality has become more extreme.  It is difficult to ascertain if the seasonality has become more extreme based on the graph above.  
 
-We next compare the two subseries graphs looking at each data set.
+We next compare the two subseries graphs looking at each dataset.
 
 
 ```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=4, warning=FALSE}
@@ -253,11 +253,11 @@ BBBBB
 
 ```
 
-With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present data set than in the one ending in 1997.
+With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present dataset than in the one ending in 1997.
 
-That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second data set.
+That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second dataset.
 
-We now remove the seasonal fluctuations in both data sets and graph the increase in atmospheric CO2 PPM.
+We now remove the seasonal fluctuations in both datasets and graph the increase in atmospheric CO2 PPM.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=3}
 
@@ -303,7 +303,7 @@ ochart_2
 ```
 
 
-We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our data set to confirm that the 
+We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our dataset to confirm that the 
 
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7.5, fig.height=6}

@@ -76,7 +76,8 @@ plot_present <- co2_present %>%
   aes(x=index, y=value) + 
   geom_line(color = 'steelblue') +
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$ 1998 through Present)'),
+    title = TeX(r'(Monthly Mean $CO_2$)'),
+    subtitle = " 1998 through Present",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
   )
@@ -370,4 +371,51 @@ adf.test(trModel$residuals, alternative="stationary", k=5)
 pp.test(trModel$residuals, alternative="stationary")
 
 ```
+
+## (1 point) Task 2b: Compare linear model forecasts against realized CO2
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+future_df <- new_data(co2_ts, n=23 * 12)
+
+fit_quadratic <- co2_ts %>%
+   model(trend_model = TSLM(value ~ trend()+I(trend()^2))) 
+
+fit_quadratic_season <- co2_ts %>%
+  model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
+
+present_prediction_based_on_1997_data <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "(Quadratic Model w/ Trend & Seasonal Effects)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+data_and_prediction_overlay <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot(co2_present) +  
+  labs(
+    title = TeX(r'(Monthly Mean $CO_2$)'),
+    subtitle = "(Series, with Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | present_prediction_based_on_1997_data) /
+  data_and_prediction_overlay
+
+```
+
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting we developed in our first section.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
+
+We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
+
+The model is very accurate.
+
+## (1 point) Task 3b: Compare ARIMA models forecasts against realized CO2  
+
+
 

@@ -8,6 +8,12 @@ output:
 
 ## Introduction
 
+In the 1950s, a geochemist, Charles David Keeling, began to collect air samples to measure the amount of carbon dioxide in the air, and these measurements would become his life's work. His initial samples indicated that the air contained more CO2 at night compared to the daytime. This finding suggested that plants absorbed CO2 during the day and released CO2 during the evening. Over time, his measurements showed a seasonal cycle, which was consistent with the seasonal patterns of terrestrial vegetation, and the CO2 data also would persistently increase over time. This rise in CO2 prompted questions about preconceived notions around the ocean's ability to absorb CO2 emitted by fossil fuels. If CO2 released by coal, natural gas, and petroleum remained in the air, this could account for the rise in CO2 over the years. 
+
+This finding is incredibly important, because the rising rate of CO2 has implications on the Earth's ability to release heat from the atmosphere. If heat isn't able to escape, then this would subsequently result in a warmer climate, which would become known as the "greenhouse effect". However, while the CO2 data demonstrated a clear upward trend over time, it was also marked by periods of decline which could not solely be attributed to plant growth seasonality. A deeper investigation revealed that El Nino weather patterns affected the amount of CO2 that was released in the air by vegetation and soils. Over time, the data would also show earlier seasonal starts, and when this data was layered with temperature data, it had become clear that the concerns of a warming planet years earlier were starting to manifest itself within the data. Since this connection has been established between rising CO2 and corresponding global temperatures, more attention has surrounded the topics of global warming and climate change. As a result, business and political decision makers are starting to incorporate this data into their longer-term strategies; however, their pace of action may be too slow to prevent some of dangers associated with climate change. 
+
+In the analysis below, we will confirm the trends identified above by Keeling himself and use this data to fit a model to make a forecast of CO2 levels in the future.
+
 ## Exploratory Data Analysis
 ```{r load packages, echo = FALSE, message = FALSE, warning=FALSE, warn = FALSE}
 library(tidyverse)
@@ -128,7 +134,7 @@ log_residuals <- components(dcmp_multi) %>%
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
 
-From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears a bit more stable, supporting the idea that this might actually be a multiplicative time series. In the next section we should take a look at applying a log transform on our series prior to modeling.
+From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears just slightly more stable, tentatively supporting the idea that this might actually be a multiplicative time series, contrary to our earlier findings. In the next section we should take a look at applying a log transform on our series prior to modeling.
 
 Looking at the residual plots, the residuals on both appear stationary, meaning that the decomposition methods we are using was able to eliminate deterministic components from the time series. However, they do not appear to be white noise, meaning that there is still correlation in the data.
 
@@ -146,7 +152,7 @@ Based on the ADF and PP tests, we can reject the null hypothesis that the time s
 
 ## Modeling
 
-Let's start by creating two linear models, one fit on our CO2 data and one fit on the log transform of our CO2 data. Since in our EDA we did notice that the fluctuations within the seasonality of the time series seem to grow slightly larger over time, indicating a potentially multiplicative series, we want to try out this log transform to see if it reduces variance in our model and leads to smaller residuals.
+Let's start by creating two linear models, one fit on our CO2 data and one fit on the log transform of our CO2 data. Since in our EDA we did notice that the fluctuations within the seasonality of the time series seem to grow slightly larger over time, potentially indicating a multiplicative series, we want to try out this log transform to see if it reduces variance in our model and leads to smaller residuals.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_linear <- co2_df %>%
@@ -266,7 +272,7 @@ Box.test(quadratic_log_residuals, lag = 10, type = "Ljung-Box")
 
 As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely again the seasonality).
 
-Since the log transforms don't appear to reduce any of the variance in our models, I am going to compare the linear model directly with the quadratic model on non-transformed data. Our previous analysis shows that both models are behaving similarly, so I am just going to compare the two using the Bayesian Information Criteria (BIC) as my metric.
+Since the log transforms don't appear to reduce any of the variance in our models, I am going to compare the linear model directly with the quadratic model on non-transformed data. Our previous analysis shows that both models are behaving similarly but the quadratic model did have smaller residuals compared to the linear model, making it the more favorable model. In addition to the residual analysis, I going to compare the two using the Bayesian Information Criteria (BIC) as my metric.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 glance(fit_linear) %>% 
@@ -278,7 +284,7 @@ glance(fit_quadratic) %>%
 
 The quadratic model has a lower BIC, so I will move forward using the quadratic model. Our next step is to fit a polynomial model that incorporates seasonal dummy variables, which will hopefully account for some of the variance that we failed to capture in our previous models. We'll create models using both the log transform and the normal CO2 values, although it has appeared from our past models that the log transform does not seem to account for much, if any, variance in our data.
 
-```{r}
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_season <- co2_df %>%
   model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
 
@@ -288,6 +294,7 @@ fit_quadratic_log_season <- co2_df %>%
 fit_quadratic_season %>% report()
 fit_quadratic_log_season %>% report()
 ```
+
 Just from this summary, we can see that the R-squared values are slightly higher on both of these seasonal models than either the linear or quadratic models. We can also see that all the input coefficients are highly significant. Let's plot our models next.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
@@ -313,7 +320,7 @@ fit_quadratic_season %>% gg_tsresiduals() + labs(title = "Quadratic Season Resid
 fit_quadratic_log_season %>% gg_tsresiduals() + labs(title = "Log Quadratic Season Residuals") 
 ```
 
-The residuals again don't look much different here between both models, signaling that a log transformation is unnecessary for this seasonal quadratic model as well. In both models, the ACFs now shows highly significant and slowly declining lags, unlike the ACF plots on the previous models which showed an oscillating trend that was likely related to seasonality variance that our latest models are now capturing. The residuals appear somewhat normally distributed for both models. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before:
+The residuals again don't look much different here between both models, signaling that a log transformation is unnecessary for this seasonal quadratic model as well. In both models, the ACFs now shows highly significant and slowly declining lags, unlike the ACF plots on the previous models which showed an oscillating trend that was likely related to seasonality variance that our latest models are now capturing. The residuals appear somewhat normally distributed for both models. In comparison to both the non-seasonal linear and quadratic models, the residuals are small in magnitude. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before:
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 quadratic_season_residuals <- fit_quadratic_season %>%
@@ -351,9 +358,32 @@ predictions <- fit_quadratic_season %>%
 
 fit_quadratic_season %>%
   forecast(new_data = future_df) %>%
-  autoplot(co2_df)
+  autoplot(co2_df) + labs(title = "CO2 Predictions Using Seasonal Quadratic Model")
 ```
 
-We can see that these predictions continue the trend and seasonal fluctuations that we noticed in our data.
+We can see that these predictions continue to follow the trend and seasonal fluctuations that we noticed in our data. Let's complete our linear modeling by examining the CLM assumptions for our best model, the seasonal quadratic model.
 
-# TODO: Check CLM assumptions? https://github.com/mids-271/summer_22_central/blob/master/Live_session_and_solutions/LS_7_Solutions/LS-7-Solutions.pdf
+The first CLM assumption is that the underlying data generating process follows a linear model. We cannot check this assumption and will just assume it's true, or that we are just fitting the best linear model to the data if it is untrue.
+
+The second assumption is ergodatic stationarity. Since this model is including trend and seasonal variables, we are eliminating the deterministic parts in the process and are satisfying this assumption. From the ACF plot, the process does look stationary but the residuals do appear serially correlated.
+
+The third assumption is no perfect multicollinearity. When we fit our model, R did not report any warning or missing coefficients, which means that this assumption is violated.
+
+The fourth assumption is the zero conditional mean assumption. We can evaluate this by looking at these residuals versus the fitted value plot, which appears below. If this assumption is satisfied, there should be no relationship between the fitted values and the residuals, a.k.a. there should be a straight line in the plot.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+augment(fit_quadratic_season) %>%
+  ggplot(aes(x = .fitted, y = .innov)) +
+  geom_point() +
+  geom_smooth(se=FALSE)+
+  scale_x_log10() +
+  labs(title = "Seasonal Quadratic Model Residuals vs Fitted")
+```
+
+The line is curved, so we cannot justify that the zero conditional mean assumption is satisfied, meaning that there are likely additional variables that should be included in our model.
+
+The fifth CLM assumption is homoskedasticity. The residuals are quite spread out with a large range of variance, so it seems as though this assumption cannot be satisfied.
+
+The last assumption is no serial correlation. From our ACF plot, the residuals do appear to be serially correlated. Additionally, the Ljung Box test returns a high statistic with a small p-value. We can reject the null hypothesis that there is no autocorrelation and conclude that our residuals here are autocorrelated, thereby not satisfying this assumption.
+
+The residuals do look close to a normal distribution, which gives us more confidence in our generated prediction intervals.

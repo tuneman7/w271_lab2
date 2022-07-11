@@ -472,42 +472,26 @@ fit2
 
 We can also try automatically fitting the model with the following code:
 ```{r}
-
+#documentation seems outdated
 #source_1:https://otexts.com/fpp2/seasonal-arima.html
 #source_2:https://campus.datacamp.com/courses/forecasting-in-r/forecasting-with-arima-models?ex=10
 
+auto_fit <- co2_df %>% model(ARIMA(value)) %>%  report()
 
-#fit <- auto.arima(co2_df$value, seasonal = TRUE)
-fit <- auto.arima(co2_df$value, d = 1, D= 1, stepwise=FALSE, approximation=FALSE, seasonal = TRUE) 
-summary(fit)
-
-#reached out to Majid about this code; pulled from the book, and I'm not sure why auto doesn't seem to return parameters
-auto_fit <- co2_df %>%
-  model(
-    arima013011 = ARIMA(value ~ pdq(0,1,3) + PDQ(0,1,1)),
-    arima210011 = ARIMA(value ~ pdq(3,1,1) + PDQ(1,1,1)),
-    auto = ARIMA(value, stepwise = FALSE, approx = FALSE)
-  )
-
-auto_fit %>% pivot_longer(everything(), names_to = "Model name",
-                     values_to = "Orders")
-
-glance(auto_fit)
 ```
-
 
 
 ```{r}
 auto_fit %>% 
-  select(auto) %>% 
-  gg_tsresiduals(lag=36) #doesn't run; not sure why
+  gg_tsresiduals(lag=36) 
 
-#checkresiduals(auto_fit$auto)
 
-auto_fit %>% 
-  select(auto) %>% 
-  Box.test(auto,lag=10, fitdf=0, type="Lj")
+auto_resid <- residuals(auto_fit)
+auto_resid
+Box.test(auto_resid[3] ,lag=10, fitdf=0, type="Lj")
+
 ```
+The trend and ACF plots indicate that the residuals of the automatically fitted ARIMA model are following a white noise process. Autocorrelations are close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 9. Also, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data. However, the automatically fitted ARIMA model does not outperform our first guess as the AIC in `r auto_fit` is higher. We will continue to proceed with the ARIMA(0,1,3)(0,1,1)12.
 
 ```{r}
 future_d <- new_data(co2_df, n=25 * 12)
@@ -560,12 +544,7 @@ forecast500ppm <-forecast_df %>%
  filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
 ```
 
-Generate predictions for when atmospheric CO2 is expected to be at 420 ppm and 500 ppm levels for the
-first and final times (consider prediction intervals as well as point estimates in your answer). Generate a
-prediction for atmospheric CO2 levels in the year 2100. How confident are you that these will be accurate
-predictions?
-
-When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. 
+When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. Given that the NOAA reported that the Earth reached 419ppm back in May 2021, it would appear that the accuracy of the model is off for a closer 
 
 ```{r}
 sapply(forecast_df, class)
@@ -581,17 +560,40 @@ forecast_df %>%
     y="CO2 (PPM)",
        title="2100 CO2 predictions")
 ```
-```{r}
-co2_df %>%
-  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
-  forecast(h=103 * 12)  %>%
-  accuracy(co2_df)
+Based on the very wide confidence intervals, we're not very confident that these are accurate predictions. To assess the accuracy of our predictions compared to another model, we can also look at the root mean squared error (RMSE). We'll use an ETS model as our point of comparison for RMSE. We should expect that the ETS model should perform worse as it does not perform as well with larger seasonal frequency.
 
-#%>%
-  #select(.model, RMSE:MAPE)
+```{r}
+#https://robjhyndman.com/hyndsight/longseasonality/
+
+train <- co2_df %>% filter_index(. ~ "1989 Jan")
+
+fit_arima <- train %>% model(ARIMA(value))
+report(fit_arima)
+
+fit_arima %>% gg_tsresiduals(lag_max = 16)
+
+augment(fit_arima) %>%
+  features(.innov, ljung_box, lag = 16, dof = 6)
+
+fit_ets <- train %>% model(ETS(value))
+report(fit_ets)
+
+fit_ets %>%
+  gg_tsresiduals(lag_max = 16)
+
+augment(fit_ets) %>%
+  features(.innov, ljung_box, lag = 16, dof = 6)
+
+bind_rows(
+    fit_arima %>% accuracy(),
+    fit_ets %>% accuracy(),
+    fit_arima %>% forecast(h = 10) %>% accuracy( co2_df),
+    fit_ets %>% forecast(h = 10) %>% accuracy( co2_df)
+  )
+
+
 ```
 
-
-
+Based on the above results, the ARIMA and ETS models perform about the same based on the RMSE values on the test sets. While our predictions are probably a best guess given the information that we have, the ARIMA model assumes that seasonality is fixed over time, and this is a strong assumption to make given that there are other factors that could likely impact CO2 over time.
 
 

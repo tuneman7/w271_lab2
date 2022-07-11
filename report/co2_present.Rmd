@@ -62,6 +62,8 @@ co2_present_monthly <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/
 #548 2008-06-29 -999.99 NaN
 #549 2008-07-06 -999.99 NaN
 #550 2008-07-13 -999.99 NaN
+#    2005-10-16 -999.99 NaN
+#
 #Grab weekly data
 co2_present <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt') %>%
   filter(V1 >= 1998)%>%
@@ -242,7 +244,7 @@ Parsing the "1997" dataset, to include 293 months only, yields a ACF which cross
 
 Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
 
-In order to compare it to the 1997 seasonality we aggregate values within the weekly dataset to monthly values.
+In order to the present dataset's seasonality 1997 seasonality we aggregate values within the weekly dataset to monthly values, for the purpose of this comparison.
 
 ```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=5, warning=FALSE}
 
@@ -460,7 +462,7 @@ data_and_lm_prediction_overlay <- fit_quadratic_season %>%
   forecast(new_data = future_df) %>%
   autoplot(co2_present) +  
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
+    title = TeX(r'(Weekly Mean $CO_2$)'),
     subtitle = "(Series, with Linear Prediction Overlay)",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
@@ -492,7 +494,7 @@ data_and_arima_prediction_overlay <- co2_ts %>%
   forecast(new_data = future_d) %>%
   autoplot(co2_present)  +
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
+    title = TeX(r'(Weekly Mean $CO_2$)'),
     subtitle = "(Series, with ARIMA Prediction Overlay)",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
@@ -530,4 +532,4 @@ To demonstrate this we graph both on top of one another below.
 data_and_lm_prediction_overlay / 
   data_and_arima_prediction_overlay
 
-```
+```   

@@ -1,3 +1,9 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
 # Report from the Point of View of 1997 
 
 ## Introduction
@@ -24,6 +30,7 @@ library(sandwich)
 library(lmtest)
 library(tseries)
 library(gridExtra)
+
 theme_set(theme_minimal())
 knitr::opts_chunk$set(dpi=1000)
 ```
@@ -36,6 +43,7 @@ Let's take a look at the data. In raw form, it appears as a matrix of doubles th
 
 ```{r echo = FALSE, message = FALSE}
 co2_df <- tsibble::as_tsibble(co2)
+
 plot <- co2_df %>%
   ggplot + 
   aes(x=index, y=value) + 
@@ -49,6 +57,7 @@ hist <- co2_df %>%
   ggplot(aes(x=value)) + geom_histogram(bins=8) + labs(title="Histogram")
 acf <- ggAcf(co2_df$value, lag.max=(15*12)) + labs(title="ACF")
 pacf <- ggPacf(co2_df$value, lag.max=(15*12)) + labs(title="PACF")
+
 plot + acf + hist + pacf + plot_layout(design = "
 AAAAACCCC
 AAAAACCCC
@@ -72,9 +81,11 @@ Let's take a closer look at the seasonality in the data. We'll start by creating
 seasons <- ggseasonplot(x = co2, year.labels=TRUE, year.labels.left=TRUE) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
+
 subseries <- ggsubseriesplot(x = co2) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$)'))
+
 seasons + subseries + plot_layout(design = "
 AAAAAA
 AAAAAA
@@ -95,6 +106,7 @@ year_agg_plot <- co2_df %>%
   ggplot(aes(x = year, y = avg_value)) +
   geom_line() +
   labs(title = TeX(r'(Annual Mean $CO_2$ Levels)'), y = TeX(r'($CO_2$ Parts per Million)'), x = "Year") 
+
 year_agg_plot
 ```
 
@@ -103,10 +115,13 @@ We can also use both additive and multiplicative decomposition to remove both th
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7, fig.height=5}
 co2_df <- co2_df %>%
   mutate(log_value = log(value))
+
 dcmp_add <- co2_df %>%
   model(stl = STL(value))
+
 dcmp_multi <- co2_df %>%
  model(stl = STL(log_value))
+
 decomp <- components(dcmp_add) %>% autoplot()
 residuals <- components(dcmp_add)%>%
   ACF(remainder) %>%
@@ -115,6 +130,7 @@ log_decomp <- components(dcmp_multi) %>% autoplot()
 log_residuals <- components(dcmp_multi) %>%
   ACF(remainder) %>%
   autoplot() + labs(title="Multiplicative residuals")
+
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
 
@@ -141,8 +157,10 @@ Let's start by creating two linear models, one fit on our CO2 data and one fit o
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_linear <- co2_df %>%
   model(trend_model = TSLM(value ~ trend()))
+
 fit_linear_log <- co2_df %>%
   model(trend_model = TSLM(log_value ~ trend()))
+
 fit_linear %>% report()
 fit_linear_log %>% report()
 ```
@@ -155,11 +173,13 @@ fit_linear_plot <- augment(fit_linear)%>%
   geom_line(aes(y = value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Linear Model / Mean $CO_2$ Levels)')) 
+
 fit_linear_log_plot <- augment(fit_linear_log)%>%
   ggplot(aes(x = index)) +
   geom_line(aes(y = log_value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Log Linear Model / Log Mean $CO_2$ Levels)')) 
+
 grid.arrange(fit_linear_plot, fit_linear_log_plot, nrow = 1, ncol = 2)
 ```
 From these plots, both models seem to do a similar job fitting the data but fail to account for any of the seasonal "waves". Next, let's examine the model residuals.
@@ -179,10 +199,12 @@ linear_residuals <- fit_linear %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 linear_log_residuals <- fit_linear_log %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 Box.test(linear_residuals, lag = 1, type = "Ljung-Box")
 Box.test(linear_residuals, lag = 10, type = "Ljung-Box")
 Box.test(linear_log_residuals, lag = 1, type = "Ljung-Box")
@@ -199,6 +221,7 @@ fit_quadratic <- co2_df %>%
  
 fit_quadratic_log <- co2_df %>%
    model(trend_model = TSLM(log_value ~ trend()+I(trend()^2))) 
+
 fit_quadratic %>% report()
 fit_quadratic_log %>% report()
 ```
@@ -211,11 +234,13 @@ fit_quadratic_plot <- augment(fit_quadratic)%>%
   geom_line(aes(y = value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Quadratic Model / Mean $CO_2$ Levels)')) 
+
 fit_quadratic_log_plot <- augment(fit_quadratic_log)%>%
   ggplot(aes(x = index)) +
   geom_line(aes(y = log_value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Log Quadratic Model / Log Mean $CO_2$ Levels)')) 
+
 grid.arrange(fit_quadratic_plot, fit_quadratic_log_plot, nrow = 1, ncol = 2)
 ```
 
@@ -233,10 +258,12 @@ quadratic_residuals <- fit_quadratic %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 quadratic_log_residuals <- fit_quadratic_log %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 Box.test(quadratic_residuals, lag = 1, type = "Ljung-Box")
 Box.test(quadratic_residuals, lag = 10, type = "Ljung-Box")
 Box.test(quadratic_log_residuals, lag = 1, type = "Ljung-Box")
@@ -250,6 +277,7 @@ Since the log transforms don't appear to reduce any of the variance in our model
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 glance(fit_linear) %>% 
   select(BIC)
+
 glance(fit_quadratic) %>% 
   select(BIC)
 ```
@@ -259,8 +287,10 @@ The quadratic model has a lower BIC, so I will move forward using the quadratic 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_season <- co2_df %>%
   model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
+
 fit_quadratic_log_season <- co2_df %>%
   model(trend_model = TSLM(log_value ~ trend() + I(trend()^2) + season())) 
+
 fit_quadratic_season %>% report()
 fit_quadratic_log_season %>% report()
 ```
@@ -273,11 +303,13 @@ fit_quadratic_season_plot <- augment(fit_quadratic_season)%>%
   geom_line(aes(y = value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Quadratic Seasonal Model / Mean $CO_2$ Levels)')) 
+
 fit_quadratic_log_season_plot <- augment(fit_quadratic_log_season)%>%
   ggplot(aes(x = index)) +
   geom_line(aes(y = log_value, colour = "Data")) +
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Log Quadratic Seasonal Model / Log Mean $CO_2$ Levels)')) 
+
 grid.arrange(fit_quadratic_season_plot, fit_quadratic_log_season_plot, nrow = 1, ncol = 2)
 ```
 
@@ -295,10 +327,12 @@ quadratic_season_residuals <- fit_quadratic_season %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 quadratic_log_season_residuals <- fit_quadratic_log_season %>%
   augment() %>%
   select(.resid) %>%
   as.ts()
+
 Box.test(quadratic_season_residuals, lag = 1, type = "Ljung-Box")
 Box.test(quadratic_season_residuals, lag = 10, type = "Ljung-Box")
 Box.test(quadratic_log_season_residuals, lag = 1, type = "Ljung-Box")
@@ -318,8 +352,10 @@ The BIC for our quadratic seasonal model is much smaller than the BICs for eithe
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 future_df <- new_data(co2_df, n=23 * 12)
+
 predictions <- fit_quadratic_season %>%
   forecast(new_data = future_df)
+
 fit_quadratic_season %>%
   forecast(new_data = future_df) %>%
   autoplot(co2_df) + labs(title = "CO2 Predictions Using Seasonal Quadratic Model")
@@ -590,7 +626,6 @@ bind_rows(
     fit_arima %>% forecast(h = 10) %>% accuracy( co2_df),
     fit_ets %>% forecast(h = 10) %>% accuracy( co2_df)
   )
-
 
 ```
 

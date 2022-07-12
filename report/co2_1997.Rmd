@@ -387,3 +387,248 @@ The fifth CLM assumption is homoskedasticity. The residuals are quite spread out
 The last assumption is no serial correlation. From our ACF plot, the residuals do appear to be serially correlated. Additionally, the Ljung Box test returns a high statistic with a small p-value. We can reject the null hypothesis that there is no autocorrelation and conclude that our residuals here are autocorrelated, thereby not satisfying this assumption.
 
 The residuals do look close to a normal distribution, which gives us more confidence in our generated prediction intervals.
+
+###ARIMA Modeling
+
+Now, let's choose an ARIMA model to fit to the CO2 data. Recall that our EDA indicated that the CO2 data had the following characteristics: * non-stationary data series, 
+* slowly decaying ACF plot, indicative of an AR process
+* oscillating PCAF plot, indicative of an MA process
+* seasonal data
+
+In order to transform the data into a stationary series, we can start by applying a first-order difference to the series. 
+
+```{r}
+
+#first-order difference
+first_diff <- co2_df %>%
+  mutate(diff_co2 = difference(value)) 
+
+co2_df %>%
+gg_tsdisplay(difference(value),
+               plot_type='partial', lag=36) +
+  labs(title="First-order differenced", y="")
+```
+Based on the trend plot, the data seems to stabilize around a mean of -0.5, and it appears to have a constant variance, suggesting that the data only needs a first-order difference. The ACF plot continues to decay gradually but the oscillating behavior persists here. This indicates that the seasonal pattern is strong and stable after a first-order difference. As a result, we will want to use a seasonal difference in addition to this first difference. Since the seasonal behavior repeats every year, we will set m = 12, meaning the seasonal pattern repeats once every twelve months.
+
+```{r}
+#seasonally differenced
+co2_s_diff <- co2_df %>%
+  mutate(sdiff_co2 = difference(value, 12)) 
+
+co2_s_diff
+
+#plots for seasonal differencing
+co2_df  %>%
+gg_tsdisplay(difference(value, 12),
+               plot_type='partial', lag=36) +
+  labs(title="Seasonally differenced", y="")
+
+```
+
+On its own, seasonal differencing does not appear to make the data stationary. However, based on the ACF plot, we can confirm that the seasonal differencing either removes or significantly reduces the oscillation as it does not seem apparent anymore. As a result, we can conclude that we need both a first difference and a seasonal difference on the series. We can confirm these observations using the following unit root tests. We will first use the  Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test under the following hypothesis:
+
+H0: The data are stationary
+HA: The data are not stationary
+
+```{r}
+#unit root tests
+
+co2_df %>%
+  features(value, unitroot_kpss)
+
+first_diff %>%
+  features(diff_co2, unitroot_kpss)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_kpss )
+
+```
+
+We can interpret the tests in the following manner:
+* For the undifferenced data, the test statistic (7.81) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+* For the first differenced data, the p-value is greater than 0.1, indicating the test fails to reject the null hypothesis. That is, the data are stationary.
+* For the seasonally differenced data, the test statistic (1.94) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+Thus, we can conclude that we need both a first difference and a seasonal difference. But, how many differences do we need? To confirm that we are applying the appropriate amount of differences, we can use the following:
+
+```{r}
+
+#confirm the number of differences needed in the data
+co2_df %>%
+  features(value, unitroot_ndiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_ndiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_ndiffs)
+
+#test need for seasonal differencing; indicating one seasonal difference is required
+
+co2_df %>%
+  features(value, unitroot_nsdiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_nsdiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_nsdiffs)
+```
+
+Here we can see that once we apply a first difference and a seasonal difference, the test returns 0, indicating no additional differences are required. It is important that we correctly identify the correct number of differences as we could potentially introduce false dynamics or autocorrelations into the time series.
+
+```{r}
+#double differenced
+co2_df %>%
+  gg_tsdisplay(difference(value, 12) %>% difference(),
+               plot_type='partial', lag=36) +
+  labs(title = "Double differenced", y="")
+```
+We will now use the ACF and PACF plots of our double differenced data to determine an appropriate ARIMA model via brute force. The significant spike at lag 3 in the ACF suggests a non-seasonal MA(3) component. The significant spike at lag 12 in the ACF suggests a seasonal MA(1) component. So, we might begin with an ARIMA(0,1,3)(0,1,1)12 model, indicating a first difference, a seasonal difference, and non-seasonal MA(3) and seasonal MA(1) component. 
+
+```{r}
+fit1 <- arima(co2_df$value, order = c(0,1,3), seasonal= list(order = c(0,1,1), period = 12))
+fit1
+```
+
+```{r}
+resid <- residuals(fit1)
+autoplot(resid)
+ggAcf(resid)
+
+Box.test(resid,lag=10, fitdf=0, type="Lj")
+```
+The ACF plot indicates that the residuals are following a white noise process as each autocorrelation is close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 8. Additionally, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data.
+
+If we had evaluated the PACF as well, we may have chosen ARIMA(3,1,0)(1,1,1)12 model, indicating a first difference, a seasonal difference, non-seasonal AR(3) and MA(1) components, and seasonal AR(1) and AR(1) component. The significant spike at lag 3 in the PACF suggests a non-seasonal AR(3) component. The significant spike at lag 12 in the PACF suggests a seasonal AR(1) component. However, by comparing the AIC values of the first and second model, the first selection was a better fit based on the lower AIC value.
+
+```{r}
+fit2 <- arima(co2_df$value, order = c(3,1,1), seasonal= list(order = c(1,1,1), period = 12))
+fit2
+```
+
+We can also try automatically fitting the model with the following code:
+```{r}
+#documentation seems outdated
+#source_1:https://otexts.com/fpp2/seasonal-arima.html
+#source_2:https://campus.datacamp.com/courses/forecasting-in-r/forecasting-with-arima-models?ex=10
+
+auto_fit <- co2_df %>% model(ARIMA(value)) %>%  report()
+
+```
+
+
+```{r}
+auto_fit %>% 
+  gg_tsresiduals(lag=36) 
+
+
+auto_resid <- residuals(auto_fit)
+auto_resid
+Box.test(auto_resid[3] ,lag=10, fitdf=0, type="Lj")
+
+```
+The trend and ACF plots indicate that the residuals of the automatically fitted ARIMA model are following a white noise process. Autocorrelations are close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 9. Also, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data. However, the automatically fitted ARIMA model does not outperform our first guess as the AIC in `r auto_fit` is higher. We will continue to proceed with the ARIMA(0,1,3)(0,1,1)12.
+
+```{r}
+future_d <- new_data(co2_df, n=25 * 12)
+
+co2_df %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot(co2_df ) +
+  labs(x = 'Month of Year',
+    y="CO2 (PPM)",
+       title="CO2 measurements over time")
+
+```
+
+Again, we can see that these predictions continue to follow the trend and seasonal fluctuations that we noticed earlier in the data. However, our confidence intervals continue to widen with each year that we forecast. 
+
+###Forecast atmospheric CO2 growth
+
+If we generate predictions for when atmospheric CO2 is expected to be at 420 ppm and 500 ppm levels at the 95% confidence level, we can observe the wide confidence intervals noted in the previous graph. Predictions for 420ppm were as early as April 2022 and as late as December 2100. Surprisingly, when we make predictions on for 500ppm the confidence intervals narrow. According to this model's predictions, 500ppm CO2 levels will occur as early as March 2055 and as late as August 2086.
+
+```{r}
+co2_ext_forecast <- forecast(fit1, h=103 * 12, level = c(95))
+co2_ext_forecast <- summary(co2_ext_forecast)
+
+ts.d  <- as.data.frame(as.yearmon(1998 + seq(0, 1235)/12))
+
+forecast_df <- cbind(ts.d, co2_ext_forecast)
+colnames(forecast_df )[1] <- "time_index"
+colnames(forecast_df )[2] <- "point_forecast"
+colnames(forecast_df )[3] <- "lo_95"
+colnames(forecast_df )[4] <- "high_95"
+
+forecast420ppm <- forecast_df %>%
+ filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
+
+min(forecast420ppm$time_index) 
+max(forecast420ppm$time_index)
+
+max(forecast420ppm$time_index) - min(forecast420ppm$time_index) 
+
+forecast500ppm <-forecast_df %>%
+ filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
+
+min(forecast500ppm$time_index) 
+max(forecast500ppm$time_index)
+
+max(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
+
+forecast500ppm <-forecast_df %>%
+ filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
+```
+
+When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. 
+
+```{r}
+sapply(forecast_df, class)
+
+forecast_df %>%
+ filter(year(time_index)==2100)
+
+forecast_df %>%
+ filter(year(time_index)==2100)%>%
+  ggplot(aes(time_index, point_forecast)) + geom_point() + 
+  geom_errorbar(aes(ymin = lo_95, ymax = high_95)) +
+  labs(x = 'Month of Year',
+    y="CO2 (PPM)",
+       title="2100 CO2 predictions")
+```
+Based on the very wide confidence intervals, we're not very confident that these are accurate predictions. To assess the accuracy of our predictions more methodically, we can create a training set and a test set. From the plot, we can see that our predictions widen from the actuals with each consecutive year in just the last 8 years. While our predictions are probably a best guess given the information that we have, the ARIMA model assumes that seasonality is fixed over time, and this may be a strong assumption to make given that there are other factors that could likely impact CO2 over time. 
+
+When we observe the residuals, we also notice that there are two significant spikes in the ACF plot at lag 3 and lag 9. Our p-value from the Box-Ljung test is also greater than 0.05, meaning that we fail to reject the null hypothesis of no serial correlation. However, since both of these observations are close to the significance threshold, this may be cause for concern around the predictive power of our model, particularly for such a far projection in time. 
+
+```{r}
+#https://robjhyndman.com/hyndsight/longseasonality/
+#https://otexts.com/fpp3/tscv.html
+
+#creating training data
+train <- co2_df %>% filter_index(. ~ "1989 Jan")
+train
+
+fit_arima <- train %>% model(ARIMA(value))
+report(fit_arima)
+
+co2_fc <- fit_arima %>%
+  forecast(h = 12 *8)
+
+co2_fc  %>%
+  autoplot(
+    co2_df %>% filter(year(index) >= 1989),
+    level = NULL
+  ) +
+  labs(
+    y = "CO2 (ppm)",
+    title = "Forecasts for co2 levels"
+  ) +
+  guides(colour = guide_legend(title = "Forecast"))
+
+fit_arima %>% 
+  gg_tsresiduals(lag_max = 16)
+
+augment(fit_arima) %>%
+  features(.innov, ljung_box, lag = 16, dof = 6)
+
+```

@@ -487,14 +487,13 @@ co2_df %>%
 We will now use the ACF and PACF plots of our double differenced data to determine an appropriate ARIMA model via brute force. The significant spike at lag 3 in the ACF suggests a non-seasonal MA(3) component. The significant spike at lag 12 in the ACF suggests a seasonal MA(1) component. So, we might begin with an ARIMA(0,1,3)(0,1,1)12 model, indicating a first difference, a seasonal difference, and non-seasonal MA(3) and seasonal MA(1) component. 
 
 ```{r}
-# fit1 <- arima(co2_df$value, order = c(0,1,3), seasonal= list(order = c(0,1,1), period = 12))
+fit1 <- arima(co2_df$value, order = c(0,1,3), seasonal= list(order = c(0,1,1), period = 12))
 
-fit1 <- co2_df %>%
-  model(
-  arima_fit = ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1, period=12)),
-  ) 
-
-fit1 %>% report()
+#fit1 <- co2_df %>%
+#  model(
+#  arima_fit = ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1, period=12)),
+#  ) 
+fit1
 ```
 
 ```{r}
@@ -1120,7 +1119,12 @@ co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
 ````{r, message=FALSE, echo=FALSE}
 # model chosen form 2a
 
-fit_linear_2a = fit_linear
+fit1 <- co2_df %>%
+  model(
+  arima_fit = ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1, period=12)),
+  ) 
+
+fit_linear_2a = fit1
 predictions_2a <- forecast(fit_linear, h = 25*12)
 accuracy_lm = accuracy(predictions_2a, co2_present_weekly_agg_monthly)
 accuracy_lm
@@ -1135,14 +1139,166 @@ accuracy_arima = accuracy(predictions_3a_pf, co2_present_weekly_agg_monthly)
 accuracy_arima
 ```
 
-Task 5b: Train best models on present data
-Seasonally adjust the weekly NOAA data, and split both seasonally-adjusted (SA) and non-seasonallyadjusted (NSA) series into training and test sets, using the last two years of observations as the test sets.
-For both SA and NSA series, fit ARIMA models using all appropriate steps. Measure and discuss how your
-models perform in-sample and (psuedo-) out-of-sample, comparing candidate models and explaining your
-choice. In addition, fit a polynomial time-trend model to the seasonally-adjusted series and compare its
-performance to that of your ARIMA model.
+## ARIMA modeling
 
-```{r, message=FALSE, echo=FALSE}
+Let's choose an ARIMA model to fit the present CO2 data from NOAA. First we will assess two datasets and two models, one dataset for seasonally adjusted data (SA) and one for non-sesonally adjusted data (NSA). Then, within both datasets, we will split the data into test and train sets with the last two years of data being the test set. Following the report from 1997 and observing the time series we have for our 1998-present data of $CO_2$ we will conclude with also applying linear differencing methods to our time series.
 
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+
+sa_co2_present_test <- co2_present_weekly_agg_monthly %>%
+  filter(index>=as.Date("2020-01-01")) %>%
+  model(stl = STL(value)) %>% 
+  components()
+sa_co2_present_train <- co2_present_weekly_agg_monthly %>%
+  filter(index < as.Date("2020-01-01")) %>%
+  model(stl = STL(value)) %>% 
+  components()
+
+
+nsa_co2_present_test <- co2_present_weekly_agg_monthly %>%
+  filter(index>=as.Date("2020-01-01"))
+nsa_co2_present_train <- co2_present_weekly_agg_monthly %>%
+  filter(index < as.Date("2020-01-01"))
 
 ```
+### Seasonally adjusted data assessment
+
+Now that we have all of our necessary data, let's get to creating models for both. First let's assess the number of differences needed for the seasonally adjusted data to be stationary, since this data already has the season component stripped out, we know there are no seasonal differences needed. Let's also assess the acf and pacf.
+
+```{r, echo=FALSE, message=FALSE}
+sa_acf <- ggAcf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted ACF")
+sa_pacf <- ggPacf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted PACF")
+sa_acf / sa_pacf
+```
+
+Next, we run a KPSS test to test for stationarity, and since the pvalue is smaller than 0.05 critical value, we know the data is not stationary. We then run ndiffs to check how many differences are needed to make the data stationary. 
+```{r}
+sa_co2_present_train %>%
+  features(season_adjust, unitroot_kpss)
+
+sa_co2_present_train %>%
+  features(season_adjust, unitroot_ndiffs)
+```
+
+From the above ndiff call, we know that there is 1 difference needed to fit the model. Assessing the ACF and PACF, the ACF has a slow decay while the PACF has a large spike at lag 1, indicating that this series has a unit root and that the process is of AR(1). Let's next difference the data once and assess the ACF and PACFs again.
+
+```{r, echo=FALSE, message=FALSE}
+sa_co2_present_train <- sa_co2_present_train %>% mutate(sa_one_diff = difference(season_adjust, 12)) 
+
+sa_acf <- ggAcf(sa_co2_present_train$sa_one_diff, lag.max=(50)) + labs(title="Seasonally adjusted ACF 1 diff")
+sa_pacf <- ggPacf(sa_co2_present_train$sa_one_diff, lag.max=(50)) + labs(title="Seasonally adjusted PACF 1 diff")
+
+sa_acf / sa_pacf
+```
+
+Looking at the seasonally adjusted ACF and PACF, we observe a significant spike at lag 2 of the PACF before decreasing and then becoming negative at lag 12, indicating that the data is an AR(2) process. Furthermore, assessing the ACF we can see that the ACF decreases slowly and then spikes again at lag 30, all significant lags being positive, it is unclear whether an MA process is present. Let's fit a couple of candidate models to compare.
+
+```{r, echo=FALSE, message=FALSE}
+sa_our_model = Arima(sa_co2_present_train$season_adjust,order=c(2,1,0), include.drift=TRUE)
+sa_our_model
+
+sa_arima_fit = sa_co2_present_train %>% model(ARIMA(season_adjust))
+report(sa_arima_fit)
+```
+Assessing the summaries from the model we chose to fit ARIMA(2,1,0) with drift and without a seasonal-ARIMA process, we get an $AIC = 88.79$ and $BIC = 103.08$. Furthermore, the algorithmically chosen model gave an $ARIMA(2,1,2)(2,0,0)[12]$ model, which the automatic call includes a season-ARIMA component, with $AIC = 78.13$ and $BIC = 106.71$. In either models, we see that the variances are close (0.081 vs. 0.076 respectively) and the $AIC AND BIC$ measurements are very similar for both, leading us to chose our estimated $ARIMA(2,1,0)$ model.
+
+Now that we have our model, let's check the residuals for stationarity.
+```{r, echo=FALSE, message=FALSE}
+sa_resid = residuals(sa_our_model)
+autoplot(sa_resid) /
+ggAcf(sa_resid)
+Box.test(sa_resid,lag=15, fitdf=0, type="Lj")
+```
+From observing the residual plot, the data loosely resembles that of white noise, while the ACF of the residuals suggests that the data is stationary as well, with a small lag spike at lag=12 and the rest of the lags within the 95% bounds. Assessing the results from the Ljung-Box test, we have a p-value that is greater than 0.05 leading us to fail to reject the null hypothesis and conclude that there is no correlation within our time series.
+
+### Non-seasonally adjusted data assessment
+
+Let's follow the same procedure we have above for the NSA data. Furthermore, we know there is a seasonal component to this data so let's see how many differences it will take for the data to become stationary.
+
+Since we have assessed the ACF and PACF in the previous parts of the report, we know there is a spike at lag 2 in the PACF followed by a steep drop-off, with a slow decay in the ACF of the time series indicating there is a AR(2) process. After differencing the data, we observe that there may be a seasonal MA term but is not clear of what order.
+
+From the below metrics we've found that 1 non-seasonal difference and 1 seasonal difference is needed.
+
+```{r, message=FALSE, echo=FALSE}
+nsa_co2_present_train %>%
+  features(value, unitroot_ndiffs)
+
+nsa_co2_present_train %>%
+  features(value, unitroot_nsdiffs)
+```
+
+Now let's fit two models, same as before. One that is automatically chosen for us and another one by our assessment, which will be an $ARIMA(2,1,0)(0,1,1)[12]$ model.
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+nsa_our_model = Arima(nsa_co2_present_train$value, order=c(2,1,0), seasonal= list(order = c(0,1,1), period = 12))
+nsa_our_model
+
+nsa_arima_fit = nsa_co2_present_train %>% model(ARIMA(value))
+report(nsa_arima_fit)
+```
+Observing the above summaries of both estimated models: the first output yields the model we chose to estimate with $AIC=184.51$ and $BIC=198.61$. Furthermore, the automatically generated model yields an $AIC=186.39$ and $BIC=211.07$, from this it is clear that we should use the model that we have generated: $ARIMA(2,1,0)(0,1,1)[12]$. It is interesting to note here that the ARIMA function call is supposed to yield the best fit model given a vector of criteria and loss metrics that must be optimised and minimized respectively, so it is not clear as to why the function call gave a model that has worse diagnostic metrics than our own estimated model. One reason we've thought of is the negative log-likelihood may have a higher weight in algorithmically determining the best fit model, since log likelihood of the auto ARIMA model is higher than that of the model we estimated.
+
+Next, we should check the residuals and run tests on the model we have estimated.
+```{r, echo=FALSE, message=FALSE}
+nsa_resid = residuals(nsa_our_model)
+autoplot(nsa_resid) /
+ggAcf(nsa_resid)
+Box.test(nsa_resid,lag=15, fitdf=0, type="Lj")
+```
+From the results of the ACF of residuals, we observe that all lags are within the significant 95% threshold which means it closely resembles that of a white noise. The time series plot of the residuals loosely resemble that of a white noise, with fluctuations floating around 0 and very rarely crossing 1 and -1. From the Ljung-Box test, we observe a p-value that is higher than 0.05 critical value, leading us to reject the null hypothesis and conclude that there is no correlation within our time series. 
+
+From these results we will continue with using $ARIMA(2,1,0)$ for our seasonally adjusted time series, and $ARIMA(2,1,0)(0,1,1)[12]$ for our non-seasonally adjusted time series.
+
+### Assessing model accuracy
+
+With creating and assessing the goodness of fit of so many models, we'd also like to observe how well our models can do against our test data. In order to do so, we will measure the accuracy of our models against a test set while also observing their forecasts into the future.
+
+* First, we create forecasts two years into the future with both models.
+* Next, we will compute the accuracy measurements of both models.
+* And finally, we will also train a polynomial time-trend model to the seasonally adjusted series and run the same accuracy computations as previous models.
+
+Here are the cross validation results of the seasonally adjusted time series:
+````{r, message=FALSE, echo=FALSE}
+# compute predictions and assess accuracy
+sa_predictions <- forecast(sa_our_model, h = 2*12+7)
+sa_accuracy = accuracy(sa_predictions, sa_co2_present_test$season_adjust)
+sa_accuracy
+```
+
+And below are the cross validation results of the non-seasonally adjusted time series:
+````{r, message=FALSE, echo=FALSE}
+# compute predictions and assess accuracy
+nsa_predictions <- forecast(nsa_our_model, h = 2*12+7)
+nsa_accuracy = accuracy(nsa_predictions, nsa_co2_present_test$value)
+nsa_accuracy
+```
+
+And now, we will fit a polynomial time trend model to the seasonall adjusted series.
+```{r, message=FALSE, echo=FALSE}
+
+sa_fit_quadratic <- sa_co2_present_test %>%
+  model(trend_model = TSLM(season_adjust ~ trend + I(trend^2)))
+sa_fit_quadratic %>% report()
+
+sa_quad_preds <- forecast(sa_fit_quadratic, h=31)
+sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

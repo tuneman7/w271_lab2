@@ -580,7 +580,7 @@ forecast500ppm <-forecast_df %>%
  filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
 ```
 
-When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. Given that the NOAA reported that the Earth reached 419ppm back in May 2021, it would appear that the accuracy of the model is off for a closer 
+When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. 
 
 ```{r}
 sapply(forecast_df, class)
@@ -596,39 +596,43 @@ forecast_df %>%
     y="CO2 (PPM)",
        title="2100 CO2 predictions")
 ```
-Based on the very wide confidence intervals, we're not very confident that these are accurate predictions. To assess the accuracy of our predictions compared to another model, we can also look at the root mean squared error (RMSE). We'll use an ETS model as our point of comparison for RMSE. We should expect that the ETS model should perform worse as it does not perform as well with larger seasonal frequency.
+Based on the very wide confidence intervals, we're not very confident that these are accurate predictions. To assess the accuracy of our predictions more methodically, we can create a training set and a test set. From the plot, we can see that our predictions widen from the actuals with each consecutive year in just the last 8 years. While our predictions are probably a best guess given the information that we have, the ARIMA model assumes that seasonality is fixed over time, and this may be a strong assumption to make given that there are other factors that could likely impact CO2 over time. 
+
+When we observe the residuals, we also notice that there are two significant spikes in the ACF plot at lag 3 and lag 9. Our p-value from the Box-Ljung test is also greater than 0.05, meaning that we fail to reject the null hypothesis of no serial correlation. However, since both of these observations are close to the significance threshold, this may be cause for concern around the predictive power of our model, particularly for such a far projection in time. 
 
 ```{r}
 #https://robjhyndman.com/hyndsight/longseasonality/
+#https://otexts.com/fpp3/tscv.html
 
+#creating training data
 train <- co2_df %>% filter_index(. ~ "1989 Jan")
+train
 
 fit_arima <- train %>% model(ARIMA(value))
 report(fit_arima)
 
-fit_arima %>% gg_tsresiduals(lag_max = 16)
+co2_fc <- fit_arima %>%
+  forecast(h = 12 *8)
+
+co2_fc  %>%
+  autoplot(
+    co2_df %>% filter(year(index) >= 1989),
+    level = NULL
+  ) +
+  labs(
+    y = "CO2 (ppm)",
+    title = "Forecasts for co2 levels"
+  ) +
+  guides(colour = guide_legend(title = "Forecast"))
+
+fit_arima %>% 
+  gg_tsresiduals(lag_max = 16)
 
 augment(fit_arima) %>%
   features(.innov, ljung_box, lag = 16, dof = 6)
 
-fit_ets <- train %>% model(ETS(value))
-report(fit_ets)
-
-fit_ets %>%
-  gg_tsresiduals(lag_max = 16)
-
-augment(fit_ets) %>%
-  features(.innov, ljung_box, lag = 16, dof = 6)
-
-bind_rows(
-    fit_arima %>% accuracy(),
-    fit_ets %>% accuracy(),
-    fit_arima %>% forecast(h = 10) %>% accuracy( co2_df),
-    fit_ets %>% forecast(h = 10) %>% accuracy( co2_df)
-  )
-
 ```
 
-Based on the above results, the ARIMA and ETS models perform about the same based on the RMSE values on the test sets. While our predictions are probably a best guess given the information that we have, the ARIMA model assumes that seasonality is fixed over time, and this is a strong assumption to make given that there are other factors that could likely impact CO2 over time.
+
 
 

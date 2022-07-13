@@ -650,3 +650,906 @@ augment(fit_arima) %>%
   features(.innov, ljung_box, lag = 16, dof = 6)
 
 ```
+
+
+# Report From the Perspective of the Present
+
+```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
+
+list.of.packages <- c("latex2exp")
+
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+library(tidyverse)
+library(tsibble)
+library(latex2exp)
+library(magrittr)
+library(patchwork)
+library(lubridate)
+library(feasts)
+library(forecast)
+library(zoo)
+library(fable)
+library(sandwich)
+library(lmtest)
+library(tseries)
+library(gridExtra)
+
+theme_set(theme_minimal())
+knitr::opts_chunk$set(dpi=1000)
+```
+
+## (1 point) Task 0b: Introduction 
+
+We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
+
+We assume that the collection process for both datasets is identical.
+
+It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
+
+
+## (3 points) Task 1b: Create a modern data pipeline for Mona Loa CO2 data.
+
+As instructed we pulled created a pipeline to pull down the weekly Mona Loa CO2 data.
+
+Within the dataset the weeks ending on dates; 2008-06-29, 2008-07-06 , 2008-07-13 , 2005-10-16, contained the measurement value -999.99, which cannot be accurate.  We "stubbed" those four dates with values similar to the weekly values for the weeks directly before or after.  We did not remove those data outright as doing so could cause problems within the utilization of the timeseries downstream.  
+
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+
+#Create a data pipeline that starts by reading from the appropriate URL, and ends by saving an object called `co2_present` that is a suitable time series object. #load from National Oceanic and Atmospheric Web site.
+#filter, mutate, and turn into tsibble object
+
+#Grab Monthly Data -- May not use this.
+co2_present_monthly <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt') %>%
+  filter(V1 >= 1998)%>%
+  mutate(index = yearmonth(as.yearmon(paste(V1, V2), "%Y %m"))) %>%
+  mutate(value = V4) %>%
+  mutate(log_value = log(V4)) %>% 
+  dplyr::select(c("index","value","log_value")) %>%
+  as_tsibble(index=index)
+
+#In Examining this data there are two perios where collections are incorrect on a weekly basis.
+# 1.  Period 
+#545 2008-06-08 387.74 5.960335
+#546 2008-06-15 388.11 5.961289
+#547 2008-06-22 387.53 5.959793
+#548 2008-06-29 -999.99 NaN
+#549 2008-07-06 -999.99 NaN
+#550 2008-07-13 -999.99 NaN
+#    2005-10-16 -999.99 NaN
+#
+#Grab weekly data
+co2_present <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt') %>%
+  filter(V1 >= 1998)%>%
+  mutate(index = as.Date(as.Date(paste(V1,V2,V3, sep="-")) )) %>%
+  mutate(value = V5) %>%
+  filter(value > 200) %>%
+  mutate(log_value = log(value)) %>% 
+  dplyr::select(c("index","value","log_value"))
+  
+
+#dates I'm manually putting values in.
+index <- as.Date(c('2008-06-29','2008-07-06','2008-07-13','2005-10-16'))
+value <- c(387.74,388.11,387.53,377.5)
+log_value <- log(value)
+df_insert <- data.frame(index,value,log_value)
+
+co2_present <- bind_rows(
+  co2_present,
+  df_insert
+) %>% as_tsibble(index=index)
+
+#Aggregate the weekly to monthly
+co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
+  filter(year(index) >= 1998)%>%
+  mutate(index = yearmonth(index)) %>%
+  group_by(index)  %>% 
+  summarize(value=mean(value))  %>% 
+  mutate(log_value = log(value)) %>% 
+  dplyr::select(c("index","value","log_value")) %>%
+  as_tsibble(index=index)
+
+```
+
+
+```{r echo = FALSE, message = FALSE}
+
+#old data
+co2_ts <- tsibble::as_tsibble(co2) %>%
+  mutate(log_value = log(value))
+
+plot_1997 <- co2_ts %>%
+  ggplot + 
+  aes(x=index, y=value) + 
+  geom_line(color = 'steelblue') +
+  labs(
+    title = TeX(r'(Monthly Mean $CO_2$ 1958 through 1997)'),
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+hist_1997 <- co2_ts %>%
+  ggplot(aes(x=value)) + geom_histogram(bins=8) + labs(title="Histogram 1958 through 1997")
+acf_1997 <- ggAcf(co2_ts$value, lag.max=(15*12)) + labs(title="ACF 1958 through 1997")
+pacf_1997 <- ggPacf(co2_ts$value, lag.max=(15*12)) + labs(title="PACF 1958 through 1997")
+
+
+plot_present <- co2_present %>%
+  ggplot + 
+  aes(x=index, y=value) + 
+  geom_line(color = 'steelblue') +
+  labs(
+    title = TeX(r'(Weekly Mean $CO_2$)'),
+    subtitle = " 1998 through Present",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+hist_present <- co2_present %>%
+  ggplot(aes(x=value)) + geom_histogram(bins=8) + labs(title="Histogram 1998 through Present")
+acf_present <- ggAcf(co2_present$value, lag.max=(15*12)) + labs(title="ACF 1998 through Present")
+pacf_present <- ggPacf(co2_present$value, lag.max=(15*12)) + labs(title="PACF 1998 through Present")
+#acf_present
+#pacf_present
+plot_present + acf_present + hist_present + pacf_present + plot_layout(design = "
+AAAAACCCC
+AAAAACCCC
+BBBBBCCCC
+BBBBBCCCC
+DDDDDCCCC
+DDDDDCCCC
+")
+
+
+
+```
+
+As with the "1997" dataset, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
+
+The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot never crosses the significance line.  
+
+The PACF of this time series has a strong postive spike a lag 1 followed by a pattern consistant with partial autocorrelation.
+
+Our histogram of has no values lower than 365, or nigher than 421, and that these values are not normally distributed.
+
+In order to better understand the differences between these two datasets we examine them side by side.
+
+```{r echo = FALSE, message = FALSE}
+
+plot_present + plot_1997 + hist_present + hist_1997 + plot_layout(design = "
+AAAAACCCC
+AAAAACCCC
+BBBBBDDDD
+BBBBBDDDD
+")
+
+```
+
+When we start looking graphing the two datasets side by side, the difference of one containing 39 years, and the other 24, begins to hamper our understanding.
+
+We take only the last 293 months of the "1997" dataset and graph it on the same space as the "present" dataset.
+
+```{r echo = FALSE, message = FALSE}
+
+
+co2_df_1 <-
+  co2_ts %>%
+  mutate(id = row_number())  %>%
+  filter(id > 175) %>%
+  mutate(id = row_number()) %>%
+  dplyr::select("id","value")  %>%
+  as_tsibble()
+  #dplyr::select("id","1972 through 1997")
+
+co2_present_df <-
+  as.data.frame(co2_present_weekly_agg_monthly) %>%
+  mutate(id = row_number()) %>%
+  #mutate("1997 through present"=value) %>%
+  dplyr::select("id","value")
+
+min_1997 = min(co2_df_1[,2], na.rm=T)
+min_present = min(co2_present_df[,2], na.rm=T)
+
+max_1997 = max(co2_df_1[,2], na.rm=T)
+max_present = max(co2_present_df[,2], na.rm=T)
+
+delta_1997 = max_1997 - min_1997
+delta_present = max_present - min_present
+
+delta_between_periods = delta_present - delta_1997
+
+
+
+ochart_1 <- ggplot() +
+   geom_line(data=co2_df_1,
+             aes(x=id,y=value, color="1973 through 1997"),
+             size=1.2) +
+   geom_line(data=co2_present_df,
+             aes(x=id,y=value, color="1997 through present"),
+             size=1.2) +
+  labs(x = "Months",
+       y = TeX(r'($CO_2$ parts per million)'),
+       title="293 month comparison: 1973 through 1997, and 1998 through present.") +
+     scale_color_manual(name='Periods',
+                     breaks=c('1973 through 1997', '1997 through present'),
+                     values=c('1973 through 1997'= '#ebcc34' , 
+                              '1997 through present'='#eb3434'))
+ochart_1
+
+
+
+```
+
+In the 293 months prior to Dec 31, 1997, the atmospheric CO2 rose by `r delta_1997` PPM.  By comparison, in the 293 months prior to May 31, 2022 (the most recent month we have a measurement for), the atmospheric CO2 rose by `r delta_present` PPM.  This is a difference of `r delta_between_periods` PPM during the same time interval.  This could indicate an acceleration in the increase in PPM.
+
+We apply the same "parsing" of the original "1997" dataset and compare the parsed dataset's ACF and PACF graphs to those of the "present" dataset.
+
+```{r echo = FALSE, message = FALSE}
+
+acf_1997 <- ggAcf(co2_df_1$value, lag.max=(15*12)) + labs(title="ACF (monthly avg) 1973 to 1997")
+pacf_1997 <- ggPacf(co2_df_1$value, lag.max=(15*12)) + labs(title="PACF (monthly avg) 1973 to 1997")
+
+   (acf_1997 | acf_present + labs(title="ACF (weekly avg) 1998 to Present")) /
+   (pacf_1997 | pacf_present + labs(title="PACF (weekly avg) 1998 to Present"))  +
+  plot_annotation(
+      title    = 'ACF and PACF comparison',
+    #  subtitle = 'Could be Random Walk',
+      tag_levels = 'A')  
+
+```
+Parsing the "1997" dataset, to include 293 months only, yields a ACF which crosses the significance line 100, while the weekly data does not cross the significance line.  We notice that the amplitude of oscillation on the "1997" datasets' ACF, is greater than the amplitude of oscillation in the "present" dataset's ACF.
+
+Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
+
+In order to the present dataset's seasonality 1997 seasonality we aggregate values within the weekly dataset to monthly values, for the purpose of this comparison.
+
+```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=5, warning=FALSE}
+
+df_3_year_season_org <- co2_ts %>%
+  filter(year(index)>= 1993)%>%
+  select("index","value")
+
+co2_present_no_log <- co2_present_weekly_agg_monthly %>%
+  filter(year(index)>= 2017)%>%
+  select("index","value")
+
+combined_no_log_latest <- bind_rows(
+  df_3_year_season_org,  
+  co2_present_no_log
+)
+
+seasons_present <- ggseasonplot(x = as.ts(combined_no_log_latest), year.labels=TRUE, year.labels.left=TRUE) +
+  ylab(TeX(r'($CO_2$ Parts per Million)')) +
+  ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
+
+
+seasons_present
+
+```
+
+In the plot above we look at the last 5 years in the "1997" dataset and the last 5 years of the "present" dataset.  
+
+What we are trying to ascertain is if the seasonality has become more extreme.  It is difficult to ascertain if the seasonality has become more extreme based on the graph above.  
+
+We next compare the two subseries graphs looking at each dataset.
+
+
+```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=4, warning=FALSE}
+
+co2_df_1_ts <-
+  co2_ts %>%
+  mutate(id = row_number())  %>%
+  filter(id > 175) %>%
+  mutate(id = row_number()) %>%
+  dplyr::select("index","value")  %>%
+  as_tsibble()
+
+subseries_1997 <- ggsubseriesplot(x = as.ts(co2_df_1_ts)) +
+  ylab(TeX(r'($CO_2$ Parts per Million)')) +
+  ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$ 1973 through 1997)'))
+
+subseries_present <- ggsubseriesplot(x = as.ts(co2_present_no_log)) +
+  ylab(TeX(r'($CO_2$ Parts per Million)')) +
+  ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$ 1998 through 2022)'))
+
+
+subseries_1997 + subseries_present + plot_layout(design = "
+AAAAA
+BBBBB
+")
+
+
+```
+
+With this new plot it becomes clearer that the yearly oscillations in PPM are more extreme in the present dataset than in the one ending in 1997.
+
+That is to say the seasonality effect shows a noticeable increase in the magnitude of the fluctuations in the second dataset.
+
+We now remove the seasonal fluctuations in both datasets and graph the increase in atmospheric CO2 PPM.
+
+In order to do this we aggregate our weekly data to monthly data in order to compare on the same scales.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=3}
+
+co2_df_1 <-
+  co2_ts %>%
+  mutate(id = row_number())  %>%
+  filter(id > 175) %>%
+  mutate(year = year(index))  %>%
+  index_by(year) %>%
+  summarise(avg_value = (sum(value)/12)) %>%  
+  mutate(id = row_number()) %>%
+  filter(id > 1 ) %>%  
+  dplyr::select("id","avg_value")
+  #dplyr::select("id","1972 through 1997")
+
+co2_present_df <- co2_present_weekly_agg_monthly %>%
+  mutate(year = year(index))  %>%
+  index_by(year) %>%
+  summarise(avg_value = (sum(value)/12)) %>%  
+  mutate(id = row_number())  %>%
+  filter(id <= 24) %>%  
+  dplyr::select("id","avg_value")
+
+
+ochart_2 <- ggplot() +
+   geom_line(data=co2_df_1,
+             aes(x=id,y=avg_value, color="1973 through 1997"),
+             size=1.2) +
+   geom_line(data=co2_present_df,
+             aes(x=id,y=avg_value, color="1997 through present"),
+             size=1.2) +
+  labs(x = "Months",
+       y = TeX(r'($CO_2$ parts per million)'),
+       title="293 month comparison: 1973 through 1997, and 1998 through present.",
+       subtitle = "Smoothed") +
+     scale_color_manual(name='Periods',
+                     breaks=c('1973 through 1997', '1997 through present'),
+                     values=c('1973 through 1997'= '#ebcc34' , 
+                              '1997 through present'='#eb3434'))
+ochart_2
+
+
+```
+
+
+We now perform additive and multiplicative decomposition to remove the trend and seasonal movements from our dataset to confirm that the 
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7.5, fig.height=6}
+co2_present_monthly <- co2_present %>%
+  mutate(log_value = log(value))
+
+dcmp_add <- co2_present %>%
+  model(stl = STL(value))
+
+dcmp_multi <- co2_present %>%
+ model(stl = STL(log_value))
+
+decomp <- components(dcmp_add) %>% autoplot()
+residuals <- components(dcmp_add)%>%
+  ACF(remainder) %>%
+  autoplot() + labs(title="Additive residuals")
+log_decomp <- components(dcmp_multi) %>% autoplot()
+log_residuals <- components(dcmp_multi) %>%
+  ACF(remainder) %>%
+  autoplot() + labs(title="Multiplicative residuals")
+
+grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
+```
+
+These graphs confirm that the time series is trending upwards.  In the additive decomposition plots (top left), we see that seasonal fluctuations increase over time.  This confirms our side-by-side graph above showing the increase in seasonal fluctuations between the two time series.
+
+The multiplicative "season_year" decomposition graph is stable, and not visibly increasing.  This means like the "1997" time series, the "present" time series may be multiplicative.
+
+Both residuals plots, again, show our time series as stationary, but not white noise.  This means correlation in the data still exists.
+
+Next we run the ADF test, as well as the PP test to see if the time series is stationary.
+
+H0: The data are not stationary
+HA: The data are stationary
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+co2_present_ts = as.ts(co2_present$value)
+
+adf.test(co2_present_ts, alternative="stationary", k=5)
+pp.test(co2_present_ts)
+
+
+```
+
+The tests above indicate that we can reject the null hypothesis that the time series is non-stationary.
+
+The Unit Root tests above indicate that this time series is difference stationary.  
+
+This contradicts our visual EDA, which shows a changing mean, given the strong upward trend.  
+
+We should note that the tests above are testing whether the time series are difference stationary.  We apply a linear model and then graph its residuals.
+
+```{r echo = FALSE, message = FALSE}
+library(lmtest)
+
+trModel <- lm(co2_present_ts ~ c(1:length(co2_present_ts)))
+
+checkresiduals(trModel) 
+
+```
+
+Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending, and appear to be normally distributed.
+
+Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
+
+#Todo -- add note that there is seasonality in here.
+
+H0: The data are not stationary
+HA: The data are stationary
+
+
+```{r echo = FALSE, message = FALSE}
+
+adf.test(trModel$residuals, alternative="stationary", k=5)
+pp.test(trModel$residuals, alternative="stationary")
+
+```
+
+Despite the fact that the ADF and PP tests indicate the data series is stationary, our visual analysis of this data set suggests that it is non-stationary as its mean is increasing over time.  We will ignore the ADF and PP test results as they can sometimes be of low power.
+
+## (1 point) Task 2b: Compare linear model forecasts against realized CO2
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+future_df <- new_data(co2_ts, n=23 * 12)
+
+fit_quadratic <- co2_ts %>%
+   model(trend_model = TSLM(value ~ trend()+I(trend()^2))) 
+
+fit_quadratic_season <- co2_ts %>%
+  model(trend_model = TSLM(value ~ trend() + I(trend()^2) + season())) 
+
+lm_prediction_based_on_1997_data <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "Quadratic Model w/ Trend & Seasonal Effects",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+data_and_lm_prediction_overlay <- fit_quadratic_season %>%
+  forecast(new_data = future_df) %>%
+  autoplot(co2_present) +  
+  labs(
+    title = TeX(r'(Weekly Mean $CO_2$)'),
+    subtitle = "(Series, with Linear Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | lm_prediction_based_on_1997_data) /
+  data_and_lm_prediction_overlay
+
+```
+
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting linear model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
+
+We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
+
+The linear model is very accurate.
+
+## (1 point) Task 3b: Compare ARIMA models forecasts against realized CO2  
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+
+future_d <- new_data(co2_ts, n=23 * 12)
+
+data_and_arima_prediction_overlay <- co2_ts %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot(co2_present)  +
+  labs(
+    title = TeX(r'(Weekly Mean $CO_2$)'),
+    subtitle = "(Series, with ARIMA Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+arima_prediction_based_on_1997_data<-co2_ts %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "(ARIMA Model w/ Trend & Seasonal Effects)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | arima_prediction_based_on_1997_data) /
+  data_and_arima_prediction_overlay
+#plot_present
+#arima_prediction_based_on_1997_data
+#data_and_arima_prediction_overlay
+
+```
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting ARIMA model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  The overlay shows a divergence between predicted ARIMA values and the actual trend.  
+
+We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
+
+The ARIMA model does not predict as accurately as the linear model.
+
+To demonstrate this we graph both on top of one another below.
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+data_and_lm_prediction_overlay / 
+  data_and_arima_prediction_overlay
+
+```   
+
+## Evaluate the performance of 1997 linear and ARIMA models
+
+In 1997 you made predictions about the first time that CO2 would cross 420 ppm. How close were your
+models to the truth?
+After reflecting on your performance on this threshold-prediction task, continue to use the weekly data to
+generate a month-average series from 1997 to the present, and compare the overall forecasting performance
+of your models from Parts 2a and 3b over the entire period. (You should conduct formal tests for this task.)
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+# display TS for atmospheric co2 for when we crossed 420ppm
+# suggests 2021-04-25, different from forecasted april 2022 from 1997 and was not within our interval of April 2022 - December 2100
+head(co2_present %>% filter(value>=420))
+
+# aggregation
+co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
+  filter(year(index) >= 1998)%>%
+  mutate(index = yearmonth(index)) %>%
+  group_by(index)  %>%
+  summarize(value=mean(value))  %>%
+  mutate(log_value = log(value)) %>%
+  dplyr::select(c("index","value","log_value")) %>%
+  as_tsibble(index=index)
+
+# model forecasts chosen form 2a
+fit_linear_2a = fit_linear
+predictions_2a <- forecast(fit_linear, h = 1000)
+accuracy_lm = accuracy(predictions_2a, co2_present_weekly_agg_monthly)
+
+pe_420 = predictions_2a %>% filter(.mean>=420)
+pe_420 = min(pe_420$index)
+
+# first fit model 3a
+forecast420ppm <- forecast_df %>%
+ filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
+
+forecast420pf <- forecast_df %>%
+ filter(round(point_forecast,0) == 420)
+
+fit_3a <- co2_df %>%
+  model(
+    arima_fit = ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1, period=12)),
+  )
+
+forecast_3a <- forecast(fit_3a, h=103 * 12, level = c(95))
+accuracy_arima = accuracy(forecast_3a, co2_present_weekly_agg_monthly)
+print('Forecasts from 1997 report')
+sprintf("Point Forecast LM: %s",pe_420)
+sprintf("Point Forecast ARIMA: %s",min(forecast420pf$time_index))
+sprintf("Lower bound forecast ARIMA: %s",min(forecast420ppm$time_index))
+sprintf("Upper bound forecast ARIMA: %s",max(forecast420ppm$time_index))
+```
+
+From our present $CO_2$ data, we observe that the date that Mona Lua crossed 420 ppm was on April 25, 2021. When comparing these across the models in the 1997 report: in the `trend model`, it is forecasted that 420ppm will not be reached until December 2041, whereas the point forecast for the ARIMA model is April 2032. The `arima fit` also had a 95% confidence interval for 420ppm where lower bound is a very wide range of April 2022 and upper bound is December 2100. Concluding, our observed actual does not match what were forecasted in either of the models. Further, our observed date is also outside of the range of the confidence interval for their estimated ARIMA model. Let's next compute and observe the accuracies of both the linear model and ARIMA model that were estimated in 1997.
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+accuracy_lm
+accuracy_arima
+```
+
+Within these accuracy measurements displayed we will choose to talk about RMSE for the remainder of this analysis. The RMSE, or Root Mean Squared Error is the standard deviati0on of the observed residauls and is used to measure the overall spread of residuals, and in our context will be used to assess the accuracy of our model fits. The RMSE of the `trend model` is `13.7` whereas the RMSE of the `arima fit` is `8.26`, concluding that the `arima fit` is the more accurate model of the two. Which is loosely true, though `arima fit` did not have confidence bounds for forecasted date of observed 420ppm, it still has a point estimate that is closer than that of the `trend model`.
+
+
+## ARIMA modeling
+
+Let's choose an ARIMA model to fit the present CO2 data from NOAA. First we will assess two datasets and two models, one dataset for seasonally adjusted data (SA) and one for non-sesonally adjusted data (NSA). Then, within both datasets, we will split the data into test and train sets with the last two years of data being the test set. Following the report from 1997 and observing the time series we have for our 1998-present data of $CO_2$ we will conclude with also applying linear differencing methods to our time series.
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+
+sa_co2_present_test <- co2_present_weekly_agg_monthly %>%
+  filter(index>=as.Date("2020-01-01")) %>%
+  model(stl = STL(value)) %>% 
+  components()
+sa_co2_present_train <- co2_present_weekly_agg_monthly %>%
+  filter(index < as.Date("2020-01-01")) %>%
+  model(stl = STL(value)) %>% 
+  components()
+
+nsa_co2_present_test <- co2_present_weekly_agg_monthly %>%
+  filter(index>=as.Date("2020-01-01"))
+nsa_co2_present_train <- co2_present_weekly_agg_monthly %>%
+  filter(index < as.Date("2020-01-01"))
+
+```
+
+### Seasonally adjusted data assessment
+
+Now that we have all of our necessary data, let's get to creating models for both. First let's assess the number of differences needed for the seasonally adjusted data to be stationary, since this data already has the season component stripped out, we know there are no seasonal differences needed. Let's also assess the acf and pacf. 
+
+Assessing the ACF and PACF plots below, the ACF has a slow decay while the PACF has a large spike at lag 1, indicating that this series has a unit root and that the process is of AR(1). 
+```{r, echo=FALSE, message=FALSE}
+sa_acf <- ggAcf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted ACF")
+sa_pacf <- ggPacf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted PACF")
+sa_acf / sa_pacf
+```
+
+Next, we run a KPSS test to test for stationarity, and since the pvalue is smaller than 0.05 critical value, we know the data is not stationary. We then run ndiffs to check how many differences are needed to make the data stationary, which is 1. Let's next difference the data once and assess the ACF and PACFs again.
+```{r, echo=FALSE, message=FALSE}
+sa_co2_present_train %>%
+  features(season_adjust, unitroot_kpss)
+
+sa_co2_present_train %>%
+  features(season_adjust, unitroot_ndiffs)
+```
+
+```{r SA differenced ACF and PACF, echo=FALSE, message=FALSE}
+sa_co2_present_train <- sa_co2_present_train %>% mutate(sa_one_diff = difference(season_adjust)) 
+
+sa_acf <- ggAcf(sa_co2_present_train$sa_one_diff, lag.max=(50)) + labs(title="Seasonally adjusted ACF 1 diff")
+sa_pacf <- ggPacf(sa_co2_present_train$sa_one_diff, lag.max=(50)) + labs(title="Seasonally adjusted PACF 1 diff")
+
+sa_acf / sa_pacf
+```
+
+Looking at the SA differenced ACF and PACF, the significant spike at lag=1 in the ACF suggests a non-seasonal MA(1) component while the PACF yields no new information. Let's fit a couple of models to compare, one being an $ARIMA(1,1,1)$ and one that is automatically computed through the `ARIMA` func call.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+sa_our_model = Arima(sa_co2_present_train$season_adjust,order=c(1,1,1), include.drift=TRUE)
+sa_our_model
+
+sa_arima_fit = sa_co2_present_train %>% model(ARIMA(season_adjust))
+report(sa_arima_fit)
+```
+Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift and without a seasonal-ARIMA process, we get an $AIC = 118$ and $BIC = 132$. Furthermore, the algorithmically chosen model gave an $ARIMA(0,1,1)(0,0,1)[12]$ model, which the automatic call includes a season-ARIMA component, with $AIC = 109$ and $BIC = 124$. In either models, we observe that the automatic model yields lower AIC and BIC values, which should lead us to choose $ARIMA(0,1,1)(0,0,1)[12]$. However, because we are using seasonally adjusted data we would like to carry forward with the model we have estimated $ARIMA(1,1,1)$ which does not contain seasonal components.
+
+Now that we have our model, let's check the residuals for stationarity.
+```{r Resid TS and resid ACF, echo=FALSE, message=FALSE, warning=FALSE}
+sa_resid = residuals(sa_our_model)
+autoplot(sa_resid) /
+ggAcf(sa_resid)
+```
+```{r box jung, echo=FALSE, message=FALSE, warning=FALSE}
+Box.test(sa_resid,lag=15, fitdf=0, type="Lj")
+```
+From observing the residual plot, the data loosely resembles that of white noise, while the ACF of the residuals suggests that the data is stationary, with a small lag spike at lag=23 and the rest of the lags within the 95% bounds. Assessing the results from the Ljung-Box test, we have a p-value that is much larger than the 0.05 critical value leading us to fail to reject the null hypothesis and conclude that there is no serial correlation within our time series.
+
+### Non-seasonally adjusted data assessment
+
+Let's follow the same procedure above for the NSA data. Furthermore, we know there is a seasonal component to this data so let's see how many differences it will take for the data to become stationary. We will also observe the PACF and ACF plots of the NSA data.
+
+From the below metrics we've found that 1 non-seasonal difference and 1 seasonal difference is needed.
+```{r, message=FALSE, echo=FALSE}
+nsa_co2_present_train %>%
+  features(value, unitroot_ndiffs)
+
+nsa_co2_present_train %>%
+  features(value, unitroot_nsdiffs)
+```
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+nsa_co2_present_train <- nsa_co2_present_train %>% mutate(diffed = difference(value) %>% difference(lag=12))
+
+nsa_acf <- ggAcf(nsa_co2_present_train$diffed, lag.max=(50)) + labs(title="Non seasonally adjusted ACF double difference")
+nsa_pacf <- ggPacf(nsa_co2_present_train$diffed, lag.max=(50)) + labs(title="Non seasonally adjusted PACF double difference")
+
+nsa_acf / nsa_pacf
+```
+
+The ACF of the doubly differenced NSA time series shows a significant spike at lag=1 and lag=12 indicating that we need non-seasonal MA(1) and seasonal MA(1) components respectively. In the PACF there is 1 significant spike at lag=1 suggesting a non-seasonal AR(1) while there is also a signifncant spike at lag=12 and lag=24 indicating a non-seasonal AR(2) component. 
+
+Now let's fit two models, same as before. One that is automatically chosen for us and another one by our assessment, which will be an $ARIMA(1,1,1)(2,1,1)[12]$ model.
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+nsa_our_model2 = Arima(nsa_co2_present_train$value, order=c(1,1,1), seasonal= list(order = c(2,1,1), period = 12))
+nsa_our_model2
+
+nsa_arima_fit = nsa_co2_present_train %>% model(ARIMA(value))
+report(nsa_arima_fit)
+nsa_our_model = Arima(nsa_co2_present_train$value, order=c(1,1,2), seasonal=list(order=c(0,1,1), period=12))
+```
+Observing the above summaries of both estimated models: the BIC is lower in the automatically generated model $ARIMA(1,1,2)(0,1,1)[12]$. We also observe that our assessments were correct and not too far off from what the auto ARIMA call concluded with. Because we are using BIC as the main criteria of model selection, we will select the algorithmically computed model as our model ($ARIMA(1,1,2)(0,1,1)[12]$) of interest.
+
+Next, we should check the residuals and run tests on the model we have estimated.
+```{r, echo=FALSE, message=FALSE}
+nsa_resid = residuals(nsa_our_model)
+autoplot(nsa_resid) /
+ggAcf(nsa_resid)
+Box.test(nsa_resid$.resid,lag=15, fitdf=0, type="Lj")
+```
+From the results of the ACF of residuals, we observe that all lags are within the significant 95% threshold which means it closely resembles that of a white noise. The time series plot of the residuals loosely resemble that of a white noise, with fluctuations floating around 0 and very rarely crossing 1 and -1. From the Ljung-Box test, we observe a p-value that is higher than 0.05 critical value, leading us to reject the null hypothesis and conclude that there is no correlation within our time series. 
+
+From these results we will continue with using $ARIMA(1,1,1)$ for our seasonally adjusted time series, and $ARIMA(1,1,2)(0,1,1)[12]$ for our non-seasonally adjusted time series.
+
+### Assessing model accuracy
+
+With creating and assessing the goodness of fit of so many models, we'd also like to observe how well our models can do against our test data. In order to do so, we will measure the accuracy of our models against a test set while also observing their forecasts into the future.
+
+* First, we create forecasts two years into the future with both models.
+* Next, we will compute the accuracy measurements of both models.
+* And finally, we will also train a polynomial time-trend model to the seasonally adjusted series and run the same accuracy computations as previous models.
+
+Here are the cross validation results of the seasonally adjusted time series:
+````{r, message=FALSE, echo=FALSE}
+# compute predictions and assess accuracy
+sa_predictions <- forecast(sa_our_model, h = 2*12+7)
+sa_accuracy = accuracy(sa_predictions, sa_co2_present_test$season_adjust)
+sa_accuracy
+```
+
+And below are the cross validation results of the non-seasonally adjusted time series:
+````{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
+# compute predictions and assess accuracy
+nsa_predictions <- forecast(nsa_our_model, h = 2*12+7)
+nsa_accuracy = accuracy(nsa_predictions$.mean, nsa_co2_present_test$value)
+nsa_accuracy
+```
+
+Looking at the RMSE of both models against our test set, we observe that the model fitted to the non-seasonally adjusted data yields a lower RMSE (0.398) compared to the seasonally adjusted model with an RMSE of 0.54. Let's take a look at the forecasting abilities descriptively below.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+# Compute predictions and assess accuracy
+# BASED ON VALUE
+nsa_future_d <- new_data( nsa_co2_present_train, n = (2*12) + 7 )
+real_test_values <- autoplot(nsa_co2_present_test)  +
+    labs(
+      title = "Actual Time Series",
+      subtitle = "Non-season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+#Arima(nsa_co2_present_train$value, order=c(2,1,0), seasonal= list(order = c(0,1,1), period = 12))
+prediction_on_test_values <- nsa_co2_present_train %>%
+   model(ARIMA(value ~ 0 + pdq(2,1,0) + PDQ(0,1,1))) %>%
+    forecast(new_data = nsa_future_d) %>%
+    autoplot()  +
+    labs(
+      title = "ARIMA Prediction",
+      subtitle = "Non-season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+data_and_arima_prediction_overlay1 <- nsa_co2_present_train %>%
+   model(ARIMA(value ~ 0 + pdq(2,1,0) + PDQ(0,1,1))) %>%
+    forecast(new_data = nsa_future_d) %>%
+    autoplot(nsa_co2_present_test)  +
+    labs(
+      title = "Series, with ARIMA Prediction Overlay",
+      subtitle = "Non-season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+( real_test_values | prediction_on_test_values ) / 
+data_and_arima_prediction_overlay1
+
+# compute predictions and assess accuracy
+# BASED ON VALUE
+# am here
+my_sa_copy <- sa_co2_present_test %>%
+  select("index","season_adjust") %>%
+  mutate(value=season_adjust) %>%
+  select("index","value")%>%
+  as_tsibble(index=index)
+sa_co2_present_test1 <-sa_co2_present_test %>%
+  mutate(value=season_adjust)%>%
+  rename(old_model = .model)
+sa_co2_present_train1 <- sa_co2_present_train %>%
+  mutate(value=season_adjust)%>%
+  rename(old_model = .model)
+sa_future_d <- new_data(sa_co2_present_train1, n = (2*12) + 7 )
+
+real_test_values <- autoplot(my_sa_copy)  +
+    labs(
+      title = "Actual Time Series",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+
+prediction_on_test_values <- sa_co2_present_test1 %>%
+   model(ARIMA(value ~ pdq(1,1,1) )) %>%
+    forecast(new_data = sa_future_d) %>%
+    autoplot()  +
+    labs(
+      title = "ARIMA Prediction",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+data_and_arima_prediction_overlay1 <- sa_co2_present_test1 %>%
+   model(ARIMA(value ~ pdq(1,1,1) )) %>%
+    forecast(new_data = sa_future_d) %>%
+    autoplot(sa_co2_present_test1)  +
+    labs(
+      title = "Series, with ARIMA Prediction Overlay",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+( real_test_values | prediction_on_test_values ) / 
+data_and_arima_prediction_overlay1
+```
+With the NSA data, we observe that the predicted values are very similar to the actual values, nearly 100% following the pattern that is observed in the actual data from Jan 2020 to May 2022. Conversely, with the predicted values of the model fitted to the SA data, we observe that the model does not perform as well and is not as accurate. It seems as though the predicted values are about a constant amount above the actual values of $CO_2$
+
+
+And now, we will fit a polynomial time trend model to the seasonall adjusted series.
+```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
+
+sa_fit_quadratic <- sa_co2_present_train %>%
+  model(lm=TSLM(season_adjust ~ trend + I(trend^2)))
+
+sa_fit_quadratic %>% report()
+
+sa_quad_preds <- sa_fit_quadratic %>% forecast(new_datadata=future_d)
+sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
+
+```
+# TODO
+
+
+## How bad could it get?
+
+With the non-seasonally adjusted data series, generate predictions for when atmospheric CO2 is expected
+to be at 420 ppm and 500 ppm levels for the first and final times (consider prediction intervals as well as
+point estimates in your answer). Generate a prediction for atmospheric CO2 levels in the year 2122. How
+confident are you that these will be accurate predictions?
+
+Next, the question arose from a colleague of whether our model could predict the first and final times that the $CO_2$ levels would be 420ppm and 500ppm, we figured in doing so we could forecast how high the $CO_2$ levels could reach with the current state of the world, according to the NSA model we've estimated.
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
+
+nsa_prediction <- forecast(nsa_our_model, h = 20000, level=c(95))
+nsa_ts.d  <- as.data.frame(yearmonth(as.yearmon(2020 + seq(0, 19999)/12)))
+nsa_forecast_df <- cbind(nsa_ts.d, nsa_prediction)
+
+colnames(nsa_forecast_df )[1] <- "time_index"
+colnames(nsa_forecast_df )[2] <- "point_forecast"
+colnames(nsa_forecast_df )[3] <- "lo_95"
+colnames(nsa_forecast_df )[4] <- "high_95"
+
+nsa_forecast_df = as_tsibble(nsa_forecast_df)
+nsa_forecast420ppm <- nsa_forecast_df %>%
+ filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
+# max(nsa_forecast420ppm$time_index) - min(nsa_forecast420ppm$time_index) 
+
+nsa_forecast500ppm <-nsa_forecast_df %>%
+ filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
+
+# max(nsa_forecast500ppm$time_index) - min(nsa_forecast500ppm$time_index) 
+
+nsa_pe_420 = nsa_forecast_df %>%
+ filter(round(point_forecast,0) == 420)
+nsa_pe_500 = nsa_forecast_df %>%
+ filter(round(point_forecast,0) == 500)
+
+CO2_levels = c("420ppm", "500ppm")
+first_low = c(min(nsa_forecast420ppm$time_index), min(nsa_forecast500ppm$time_index))
+last_upper = c(max(nsa_forecast420ppm$time_index), max(nsa_forecast500ppm$time_index))
+point_estimates = c(min(nsa_pe_420$time_index), min(nsa_pe_500$time_index))
+
+fcst_display_df = data.frame(CO2_levels, first_low, point_estimates, last_upper)
+fcst_display_df
+```
+From our observed forecasts above, it looks like the point estimates for when CO2 levels reach 420ppm is Mar 2022 while the theoretical `first time` and `last time` this model forecasts to be 420ppm is April 2021 and May 2606 respectively (according to our 95% confidence interval). Whereas, the point estimates for when CO2 levels reach 500ppm is April 2055, while the theoretical `first time` and `last time` this model would forecast 500ppm is May 2047 and May 2529 respectively. 
+
+We'd also like to generate predictions of atmospheric CO2 levels for the year 2122:
+```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
+nsa_forecast_df %>% filter_index("2122-01" ~ "2122-12")
+```
+
+### Closing remarks
+
+According to the dataframe displayed above, according to the NSA model forecasts in the year 2122 we'd expect to see CO2 levels of 654ppm to around 660ppm. The 95% confidence intervals float around 550ppm for the low bound and 765ppm for the high bound. This is evidence of a very wide confidence interval. Observing these forecasted CO2 levels is quite daunting to be honest, as a team we were very surprised to find that in just 100 years, the CO2 levels could potentially rise by more than 100ppm.
+
+It is interesting to note here that similar to the analysis done in the 1997 report, we have also estimate confidence intervals that are very wide. Based on this fact and combined with how this Keeling curve behaves, we conclude that we are not entirely confident our forecasts will accurate.

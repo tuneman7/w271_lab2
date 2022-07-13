@@ -684,6 +684,7 @@ As instructed we pulled created a pipeline to pull down the weekly Mona Loa CO2 
 Within the dataset the weeks ending on dates; 2008-06-29, 2008-07-06 , 2008-07-13 , 2005-10-16, contained the measurement value -999.99, which cannot be accurate.  We "stubbed" those four dates with values similar to the weekly values for the weeks directly before or after.  We did not remove those data outright as doing so could cause problems within the utilization of the timeseries downstream.  
 
 
+
 ```{r echo = FALSE, message = FALSE, warning=FALSE}
 
 #Create a data pipeline that starts by reading from the appropriate URL, and ends by saving an object called `co2_present` that is a suitable time series object. #load from National Oceanic and Atmospheric Web site.
@@ -1177,7 +1178,6 @@ To demonstrate this we graph both on top of one another below.
 
 data_and_lm_prediction_overlay / 
   data_and_arima_prediction_overlay
-
 ```   
 
 ## Evaluate the performance of 1997 linear and ARIMA models
@@ -1539,17 +1539,4 @@ nsa_forecast_df %>% filter_index("2122-01" ~ "2122-12")
 According to the dataframe displayed above, according to the NSA model forecasts in the year 2122 we'd expect to see CO2 levels of 654ppm to around 660ppm. The 95% confidence intervals float around 550ppm for the low bound and 765ppm for the high bound. This is evidence of a very wide confidence interval. Observing these forecasted CO2 levels is quite daunting to be honest, as a team we were very surprised to find that in just 100 years, the CO2 levels could potentially rise by more than 100ppm.
 
 It is interesting to note here that similar to the analysis done in the 1997 report, we have also estimate confidence intervals that are very wide. Based on this fact and combined with how this Keeling curve behaves, we conclude that we are not entirely confident our forecasts will accurate. 
-
-
-
-
-
-
-
-
-
-
-
-
-
 

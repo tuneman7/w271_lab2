@@ -39,7 +39,7 @@ The data that we will analyze in this report is monthly data on the CO2 levels m
 
 The data is in units of "mole fraction", which according to the data source is "defined as the number of carbon dioxide molecules in a given number of molecules of air, after removal of water vapor. For example, 413 parts per million of CO2 (abbreviated as ppm) means that in every million molecules of (dry) air there are on average 413 CO2 molecules." The data that makes up our dataset was measured daily from Jan 1959 to Dec 1997, but in our dataset appears as an averaged mean per month in ppm units.
 
-Let's take a look at the data. In raw form, it appears as a matrix of doubles that represent the ppm measurements per month and year combination, as appears below. Let's create some initial EDA plots that will allow us to better understand the data. Let's start by analyzing time series, histogram, auto-correlation function (ACF), and partial auto-correlation function (PACF) plots.
+In raw form, the data appears as a matrix of doubles that represent the ppm measurements per month and year combination. Let's create some initial EDA plots that will allow us to better understand the data, starting by analyzing the time series, histogram, auto-correlation function (ACF), and partial auto-correlation function (PACF) plots.
 
 ```{r echo = FALSE, message = FALSE}
 co2_df <- tsibble::as_tsibble(co2)
@@ -134,7 +134,7 @@ log_residuals <- components(dcmp_multi) %>%
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
 
-From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears just slightly more stable, tentatively supporting the idea that this might actually be a multiplicative time series, contrary to our earlier findings. In the next section we should take a look at applying a log transform on our series prior to modeling.
+From these plots, we can confirm again that the time series is trending upwards, as seen in the "trend" sections of the decomposition plots. However, upon closer look, the fluctuations within the seasonality of the time series seem to grow slightly larger over time, which we can see in the "season_year" section of the top left plot. In the multiplicative plot on the bottom left, the "season_year" plot appears just slightly more stable, tentatively supporting the idea that this might actually be a multiplicative time series, contrary to our earlier findings. In the next section we should look at applying a log transform on our series prior to modeling.
 
 Looking at the residual plots, the residuals on both appear stationary, meaning that the decomposition methods we are using was able to eliminate deterministic components from the time series. However, they do not appear to be white noise, meaning that there is still correlation in the data.
 
@@ -148,7 +148,8 @@ H1: Time series is stationary
 adf.test(co2, alternative="stationary", k=5)
 pp.test(co2)
 ```
-Based on the ADF and PP tests, we can reject the null hypothesis that the time series is non-stationary. This is surprising as from our visual analysis of the time series plots, the time series does not appear to be stationary as the mean trends upwards. Because we know that both the ADF and PP tests have low power, we will move forward with the assumption that this time series is non-stationary based on our visual EDA.
+
+Based on the ADF and PP tests, we can reject the null hypothesis that the time series is non-stationary. This is surprising as based on our visual analysis of the time series plots, the time series does not appear to be stationary with a mean that trends upwards. Because we know that both the ADF and PP tests have low power, we will move forward with the assumption that this time series is non-stationary based on our visual EDA.
 
 ## Modeling
 
@@ -188,6 +189,7 @@ From these plots, both models seem to do a similar job fitting the data but fail
 fit_linear %>% gg_tsresiduals() + labs(title = "Linear Residuals") 
 fit_linear_log %>% gg_tsresiduals() + labs(title = "Log Linear Residuals") 
 ```
+
 The residuals don't look much different here between the linear and log linear models, signaling that a log transformation is unnecessary for the linear model. In both models, the ACFs show a periodic oscillating pattern which signals that something is missing from our model. Based on our EDA, this is most likely the seasonality that we discussed but did not account for in this model. Additionally, the residuals appear somewhat normally distributed for both models. Let's run a Ljung Box test to understand whether we have white noise residuals, under the following hypotheses:
 
 H0: Data are independently distributed.
@@ -213,7 +215,7 @@ Box.test(linear_log_residuals, lag = 10, type = "Ljung-Box")
 
 Based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely the seasonality).
 
-Let's repeat this process with a quadratic trend model.
+Let's repeat this process with a quadratic trend model to see if this model accounts for additional variance in our process.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic <- co2_df %>%
@@ -251,7 +253,7 @@ fit_quadratic %>% gg_tsresiduals() + labs(title = "Quadratic Residuals")
 fit_quadratic_log %>% gg_tsresiduals() + labs(title = "Log Quadratic Residuals") 
 ```
 
-The residuals don't look much different here between both models, signaling that a log transformation is unnecessary for the quadratic model as well. In both models, the ACFs show the same periodic oscillating pattern which signals that the seasonality is likely missing from our model. The residuals also appear somewhat normally distributed for both models. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before:
+The residuals don't look much different here between both models, signaling that a log transformation is unnecessary for the quadratic model as well. In both models, the ACFs show the same periodic oscillating pattern which signals that the seasonality is likely missing from our model. The residuals also appear somewhat normally distributed for both models. Let's run a Ljung Box test again to understand whether we have white noise residuals under the same hypotheses as before.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 quadratic_residuals <- fit_quadratic %>%
@@ -272,7 +274,7 @@ Box.test(quadratic_log_residuals, lag = 10, type = "Ljung-Box")
 
 As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely again the seasonality).
 
-Since the log transforms don't appear to reduce any of the variance in our models, I am going to compare the linear model directly with the quadratic model on non-transformed data. Our previous analysis shows that both models are behaving similarly but the quadratic model did have smaller residuals compared to the linear model, making it the more favorable model. In addition to the residual analysis, I going to compare the two using the Bayesian Information Criteria (BIC) as my metric.
+Since the log transforms don't appear to reduce any of the variance in our models, I am going to compare the linear model directly with the quadratic model on non-transformed data. Our previous analysis shows that both models are behaving similarly but the quadratic model has smaller residuals compared to the linear model, making it our more favorable model. In addition to the residual analysis, I going to compare the two using the Bayesian Information Criteria (BIC) as my metric.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 glance(fit_linear) %>% 
@@ -282,7 +284,7 @@ glance(fit_quadratic) %>%
   select(BIC)
 ```
 
-The quadratic model has a lower BIC, so I will move forward using the quadratic model. Our next step is to fit a polynomial model that incorporates seasonal dummy variables, which will hopefully account for some of the variance that we failed to capture in our previous models. We'll create models using both the log transform and the normal CO2 values, although it has appeared from our past models that the log transform does not seem to account for much, if any, variance in our data.
+The quadratic model has a lower BIC, so I will move forward with our modeling process using this quadratic model. Our next step is to fit a polynomial model that incorporates seasonal dummy variables, which will hopefully account for some of the variance that we failed to capture in our previous models. We'll create models using both the log transform and the normal CO2 values, although it has appeared from our past models that the log transform does not seem to account for much, if any, variance in our data.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_season <- co2_df %>%
@@ -339,7 +341,7 @@ Box.test(quadratic_log_season_residuals, lag = 1, type = "Ljung-Box")
 Box.test(quadratic_log_season_residuals, lag = 10, type = "Ljung-Box")
 ```
 
-As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data. This is surprising as our residuals are quite small, especially in comparison to our previous models. Let's compare the BIC of the quadratic seasonal model without the log transform to our previous BICs.
+As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data. This is somewhat surprising as our residuals are quite small, especially in comparison to our previous models. Let's compare the BIC of the quadratic seasonal model without the log transform to our previous BICs.
 
 Let's compare the BIC of this model against the pure linear and quadratic models without seasonal components.
 
@@ -363,13 +365,13 @@ fit_quadratic_season %>%
 
 We can see that these predictions continue to follow the trend and seasonal fluctuations that we noticed in our data. Let's complete our linear modeling by examining the CLM assumptions for our best model, the seasonal quadratic model.
 
-The first CLM assumption is that the underlying data generating process follows a linear model. We cannot check this assumption and will just assume it's true, or that we are just fitting the best linear model to the data if it is untrue.
+The first CLM assumption is that the underlying data generating process follows a linear model. We cannot check this assumption and will just assume it is true, and, if untrue, assume that we are just fitting the best linear model to the data.
 
 The second assumption is ergodatic stationarity. Since this model is including trend and seasonal variables, we are eliminating the deterministic parts in the process and are satisfying this assumption. From the ACF plot, the process does look stationary but the residuals do appear serially correlated.
 
 The third assumption is no perfect multicollinearity. When we fit our model, R did not report any warning or missing coefficients, which means that this assumption is violated.
 
-The fourth assumption is the zero conditional mean assumption. We can evaluate this by looking at these residuals versus the fitted value plot, which appears below. If this assumption is satisfied, there should be no relationship between the fitted values and the residuals, a.k.a. there should be a straight line in the plot.
+The fourth assumption is the zero conditional mean assumption. We can evaluate this by looking at these residuals versus the fitted value plot, plotted below. If this assumption is satisfied, there should be no relationship between the fitted values and the residuals, a.k.a. there should be a straight line in the plot.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 augment(fit_quadratic_season) %>%
@@ -382,8 +384,269 @@ augment(fit_quadratic_season) %>%
 
 The line is curved, so we cannot justify that the zero conditional mean assumption is satisfied, meaning that there are likely additional variables that should be included in our model.
 
-The fifth CLM assumption is homoskedasticity. The residuals are quite spread out with a large range of variance, so it seems as though this assumption cannot be satisfied.
+The fifth CLM assumption is homoskedasticity. The residuals are quite spread out with a large range of variance, so it seems as though this assumption is not satisfied.
 
 The last assumption is no serial correlation. From our ACF plot, the residuals do appear to be serially correlated. Additionally, the Ljung Box test returns a high statistic with a small p-value. We can reject the null hypothesis that there is no autocorrelation and conclude that our residuals here are autocorrelated, thereby not satisfying this assumption.
 
 The residuals do look close to a normal distribution, which gives us more confidence in our generated prediction intervals.
+
+## ARIMA Modeling
+
+Now, let's choose an ARIMA model to fit to the CO2 data. Recall that our EDA indicated that the CO2 data had the following characteristics: 
+
+* non-stationary data series
+
+* slowly decaying ACF plot, indicative of an AR process
+
+* oscillating PACF plot, indicative of an MA process
+
+* seasonal data
+
+In order to transform the data into a stationary series, we can start by applying a first-order difference to the series and plotting the characteristics. 
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+#first-order difference
+first_diff <- co2_df %>%
+  mutate(diff_co2 = difference(value)) 
+
+co2_df %>%
+gg_tsdisplay(difference(value),
+               plot_type='partial', lag=36) +
+  labs(title="First-order differenced", y="")
+```
+
+Based on the trend plot, the data seems to stabilize around a mean of -0.5, and it appears to have a constant variance, suggesting that the data only needs a first-order difference. The ACF plot continues to decay gradually but the oscillating behavior persists here. This indicates that the seasonal pattern is strong and stable after a first-order difference. As a result, we will want to use a seasonal difference in addition to this first difference. Since the seasonal behavior repeats every year, we will set m = 12, meaning the seasonal pattern repeats once every twelve months. The output of this seasonal model is below.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+#seasonally differenced
+co2_s_diff <- co2_df %>%
+  mutate(sdiff_co2 = difference(value, 12)) 
+
+co2_s_diff
+
+#plots for seasonal differencing
+co2_df  %>%
+gg_tsdisplay(difference(value, 12),
+               plot_type='partial', lag=36) +
+  labs(title="Seasonally differenced", y="")
+
+```
+
+On its own, seasonal differencing does not appear to make the data stationary. However, based on the ACF plot, we can confirm that the seasonal differencing either removes or significantly reduces the oscillation as it does not seem apparent anymore. As a result, we can conclude that we need both a first difference and a seasonal difference on the series. We can confirm these observations using the following unit root tests. We will first use the  Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test under the following hypothesis:
+
+H0: The data are stationary
+
+HA: The data are not stationary
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+#unit root tests
+
+co2_df %>%
+  features(value, unitroot_kpss)
+
+first_diff %>%
+  features(diff_co2, unitroot_kpss)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_kpss )
+
+```
+
+We can interpret the tests in the following manner:
+
+* For the undifferenced data, the test statistic (7.81) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+
+* For the first differenced data, the p-value is greater than 0.1, indicating the test fails to reject the null hypothesis. That is, the data are stationary.
+
+* For the seasonally differenced data, the test statistic (1.94) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected. That is, the data are not stationary.
+
+Thus, we can conclude that we need both a first difference and a seasonal difference. But, how many differences do we need? To confirm that we are applying the appropriate amount of differences, we can use the following:
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+
+#confirm the number of differences needed in the data
+co2_df %>%
+  features(value, unitroot_ndiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_ndiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_ndiffs)
+
+#test need for seasonal differencing; indicating one seasonal difference is required
+
+co2_df %>%
+  features(value, unitroot_nsdiffs)
+
+first_diff %>%
+  features(diff_co2, unitroot_nsdiffs)
+
+co2_s_diff %>%
+  features(sdiff_co2, unitroot_nsdiffs)
+```
+
+Here we can see that once we apply a first difference and a seasonal difference, the test returns 0, indicating no additional differences are required. It is important that we correctly identify the correct number of differences as we could potentially introduce false dynamics or autocorrelations into the time series.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+#double differenced
+co2_df %>%
+  gg_tsdisplay(difference(value, 12) %>% difference(),
+               plot_type='partial', lag=36) +
+  labs(title = "Double differenced", y="")
+```
+
+We will now use the ACF and PACF plots of our double differenced data to determine an appropriate ARIMA model via brute force. The significant spike at lag 3 in the ACF suggests a non-seasonal MA(3) component. The significant spike at lag 12 in the ACF suggests a seasonal MA(1) component. So, we might begin with an ARIMA(0,1,3)(0,1,1)12 model, indicating a first difference, a seasonal difference, and non-seasonal MA(3) and seasonal MA(1) component. The output of fitting this model appears below. 
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit1 <- arima(co2_df$value, order = c(0,1,3), seasonal= list(order = c(0,1,1), period = 12))
+fit1
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+resid <- residuals(fit1)
+autoplot(resid)
+ggAcf(resid)
+
+Box.test(resid,lag=10, fitdf=0, type="Lj")
+```
+
+The ACF plot indicates that the residuals are following a white noise process as each autocorrelation is close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 8. Additionally, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data.
+
+If we had evaluated the PACF as well, we may have chosen ARIMA(3,1,0)(1,1,1)12 model, indicating a first difference, a seasonal difference, non-seasonal AR(3) and MA(1) components, and seasonal AR(1) and AR(1) component. The significant spike at lag 3 in the PACF suggests a non-seasonal AR(3) component. The significant spike at lag 12 in the PACF suggests a seasonal AR(1) component. However, by comparing the AIC values of the first and second model, the first selection was a better fit based on the lower AIC value.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+fit2 <- arima(co2_df$value, order = c(3,1,1), seasonal= list(order = c(1,1,1), period = 12))
+fit2
+```
+
+We can also try automatically fitting the model:
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+#documentation seems outdated
+#source_1:https://otexts.com/fpp2/seasonal-arima.html
+#source_2:https://campus.datacamp.com/courses/forecasting-in-r/forecasting-with-arima-models?ex=10
+
+auto_fit <- co2_df %>% model(ARIMA(value)) %>%  report()
+
+```
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+auto_fit %>% 
+  gg_tsresiduals(lag=36) 
+
+
+auto_resid <- residuals(auto_fit)
+auto_resid
+Box.test(auto_resid[3] ,lag=10, fitdf=0, type="Lj")
+
+```
+
+The trend and ACF plots indicate that the residuals of the automatically fitted ARIMA model are following a white noise process. Autocorrelations are close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 9. Also, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data. However, the automatically fitted ARIMA model does not outperform our first guess as the AIC in the autofit model is higher. We will continue to proceed with the ARIMA(0,1,3)(0,1,1)12.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+future_d <- new_data(co2_df, n=25 * 12)
+
+co2_df %>%
+  model(ARIMA(value ~ 0 + pdq(0,1,3) + PDQ(0,1,1))) %>%
+  forecast(new_data = future_d) %>%
+  autoplot(co2_df ) +
+  labs(x = 'Month of Year',
+    y="CO2 (PPM)",
+       title="CO2 measurements over time")
+
+```
+
+Again, we can see that these predictions continue to follow the trend and seasonal fluctuations that we noticed earlier in the data. However, our confidence intervals continue to widen with each year that we forecast. 
+
+## Forecast atmospheric CO2 growth
+
+If we generate predictions for when atmospheric CO2 is expected to be at 420 ppm and 500 ppm levels at the 95% confidence level, we can observe the wide confidence intervals noted in the previous graph. Predictions for 420ppm were as early as April 2022 and as late as December 2100. Surprisingly, when we make predictions on for 500ppm the confidence intervals narrow. According to this model's predictions, 500ppm CO2 levels will occur as early as March 2055 and as late as August 2086, as seen below.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+co2_ext_forecast <- forecast(fit1, h=103 * 12, level = c(95))
+co2_ext_forecast <- summary(co2_ext_forecast)
+
+ts.d  <- as.data.frame(as.yearmon(1998 + seq(0, 1235)/12))
+
+forecast_df <- cbind(ts.d, co2_ext_forecast)
+colnames(forecast_df )[1] <- "time_index"
+colnames(forecast_df )[2] <- "point_forecast"
+colnames(forecast_df )[3] <- "lo_95"
+colnames(forecast_df )[4] <- "high_95"
+
+forecast420ppm <- forecast_df %>%
+ filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
+
+min(forecast420ppm$time_index) 
+max(forecast420ppm$time_index)
+
+max(forecast420ppm$time_index) - min(forecast420ppm$time_index) 
+
+forecast500ppm <-forecast_df %>%
+ filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
+
+min(forecast500ppm$time_index) 
+max(forecast500ppm$time_index)
+
+max(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
+
+forecast500ppm <-forecast_df %>%
+ filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
+```
+
+When we look specifically at CO2 levels in 2100, we can expect the ppm values to be around 525 throughout the course of the year with fairly wide confidence intervals about 100ppms lower or higher. 
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+sapply(forecast_df, class)
+
+forecast_df %>%
+ filter(year(time_index)==2100)
+
+forecast_df %>%
+ filter(year(time_index)==2100)%>%
+  ggplot(aes(time_index, point_forecast)) + geom_point() + 
+  geom_errorbar(aes(ymin = lo_95, ymax = high_95)) +
+  labs(x = 'Month of Year',
+    y="CO2 (PPM)",
+       title="2100 CO2 predictions")
+```
+
+Based on the very wide confidence intervals, we're not very confident that these are accurate predictions. To assess the accuracy of our predictions more methodically, we can create a training set and a test set. From the plot, we can see that our predictions widen from the actuals with each consecutive year in just the last 8 years. While our predictions are probably a best guess given the information that we have, the ARIMA model assumes that seasonality is fixed over time, and this may be a strong assumption to make given that there are other factors that could likely impact CO2 over time. 
+
+When we observe the residuals, we also notice that there are two significant spikes in the ACF plot at lag 3 and lag 9. Our p-value from the Box-Ljung test is also greater than 0.05, meaning that we fail to reject the null hypothesis of no serial correlation. However, since both of these observations are close to the significance threshold, this may be cause for concern around the predictive power of our model, particularly for such a far projection in time, as seen below. 
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+#https://robjhyndman.com/hyndsight/longseasonality/
+#https://otexts.com/fpp3/tscv.html
+
+#creating training data
+train <- co2_df %>% filter_index(. ~ "1989 Jan")
+train
+
+fit_arima <- train %>% model(ARIMA(value))
+report(fit_arima)
+
+co2_fc <- fit_arima %>%
+  forecast(h = 12 *8)
+
+co2_fc  %>%
+  autoplot(
+    co2_df %>% filter(year(index) >= 1989),
+    level = NULL
+  ) +
+  labs(
+    y = "CO2 (ppm)",
+    title = "Forecasts for co2 levels"
+  ) +
+  guides(colour = guide_legend(title = "Forecast"))
+
+fit_arima %>% 
+  gg_tsresiduals(lag_max = 16)
+
+augment(fit_arima) %>%
+  features(.innov, ljung_box, lag = 16, dof = 6)
+
+```

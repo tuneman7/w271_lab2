@@ -1363,9 +1363,16 @@ sa_accuracy
 And below are the cross validation results of the non-seasonally adjusted time series:
 ````{r, message=FALSE, echo=FALSE}
 # compute predictions and assess accuracy
+
+#Am here
+
 nsa_predictions <- forecast(nsa_our_model, h = 2*12+7)
 nsa_accuracy = accuracy(nsa_predictions, nsa_co2_present_test$value)
 nsa_accuracy
+
+autoplot(nsa_predictions)
+nsa_co2_present_test
+
 ```
 
 And now, we will fit a polynomial time trend model to the seasonall adjusted series.

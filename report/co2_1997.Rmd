@@ -1,9 +1,19 @@
 ---
-output:
-  pdf_document: default
-  html_document: default
 title: "Atmospheric CO2 Comprehensive Analysis"
 author: "Aastha Khana, Eda Kavlakoglu, Don Irwin, Ben Mok"
+date: "07/13/2022"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+    pandoc_args: --listings
+    includes:
+      in_header: preamble.tex
+  html_document: default
+  word_document:
+    toc: yes
+subtitle: U.C. Berkeley, MIDS, Summer 2022, W271 Lab2
+geometry: left=1cm,right=1cm,top=1cm,bottom=1.5cm
 ---
 
 # Report from the Point of View of 1997 
@@ -43,6 +53,8 @@ The data is in units of "mole fraction", which according to the data source is "
 
 In raw form, the data appears as a matrix of doubles that represent the ppm measurements per month and year combination. Let's create some initial EDA plots that will allow us to better understand the data, starting by analyzing the time series, histogram, auto-correlation function (ACF), and partial auto-correlation function (PACF) plots.
 
+### Standard time series graph analysis
+
 ```{r echo = FALSE, message = FALSE}
 co2_df <- tsibble::as_tsibble(co2)
 
@@ -69,6 +81,7 @@ DDDDDCCCC
 DDDDDCCCC
 ")
 ```
+
 As we can see above, the data seems to follow a clear and increasing trend, with a distinct seasonal pattern that appears as "waves" that we would like to further analyze. The magnitude of the fluctuations do not appear to vary with the time series level, so in terms of decomposition, an additive model would likely fit this series best. The time series does not appear stationary from this plot, as the mean does not appear constant and in fact appears to increase over time, but the variance appears to be constant.
 
 The ACF starts out close to 1 and declines slowly over time, losing significance but staying mostly positive and above the significance line until around lag 140. This slow decline in ACF is what we should see in a time series with a pronounced trend effect, and tracks with what we noticed in the previous time series plot. There appear to be "waves" in the ACF plot similar to the "waves" we also noticed in the time series plot, indicating that the there is a seasonal or cyclic component to our data. Thinking ahead to our modeling, the ACF seems to indicate an autoregressive component in our data generating process, as it declines slowly over time.
@@ -76,6 +89,8 @@ The ACF starts out close to 1 and declines slowly over time, losing significance
 The PACF starts out with a single significant positive spike at lag 1, followed by a (relatively smaller) significant negative spike at lag 2, with oscillating clusters of positive and negative lags with much lower levels of significance as the lag number increases. Thinking ahead to our modeling, the PACF seems to indicate an moving average component in our data generating process, as it oscillates between positive and negative over time.
 
 The histogram shows that the CO2 values seem to range between 300 and 380 ppm and do not appear normally distributed, with most values in between these two ranges. 
+
+### Analyzing seasonality
 
 Let's take a closer look at the seasonality in the data. We'll start by creating a season plot and a subseries plot of the data.
 
@@ -111,10 +126,12 @@ year_agg_plot <- co2_df %>%
 
 year_agg_plot
 ```
+\newpage
+### Removing trend and seasonal movements
 
 We can also use both additive and multiplicative decomposition to remove both the trend and seasonal movements from our dataset and confirm that the variance is stationary. The results from these decompositions are plotted below.
 
-```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7, fig.height=5}
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7, fig.height=4}
 co2_df <- co2_df %>%
   mutate(log_value = log(value))
 
@@ -140,6 +157,8 @@ From these plots, we can confirm again that the time series is trending upwards,
 
 Looking at the residual plots, the residuals on both appear stationary, meaning that the decomposition methods we are using was able to eliminate deterministic components from the time series. However, they do not appear to be white noise, meaning that there is still correlation in the data.
 
+### Testing whether time series is stationary
+
 Let's complete our EDA by running statistical tests to determine whether our model is stationary or non-stationary. We will run both the Augmented Dickey-Fuller (ADF) test and the Phillips Perron (PP) test to do this, under the following hypotheses:
 
 H0: Time series is non-stationary
@@ -154,6 +173,8 @@ pp.test(co2)
 Based on the ADF and PP tests, we can reject the null hypothesis that the time series is non-stationary. This is surprising as based on our visual analysis of the time series plots, the time series does not appear to be stationary with a mean that trends upwards. Because we know that both the ADF and PP tests have low power, we will move forward with the assumption that this time series is non-stationary based on our visual EDA.
 
 ## Modeling
+
+### Linear and log-linear models
 
 Let's start by creating two linear models, one fit on our CO2 data and one fit on the log transform of our CO2 data. Since in our EDA we did notice that the fluctuations within the seasonality of the time series seem to grow slightly larger over time, potentially indicating a multiplicative series, we want to try out this log transform to see if it reduces variance in our model and leads to smaller residuals.
 
@@ -170,7 +191,7 @@ fit_linear_log %>% report()
 
 We can see from the output here that the R-squared values on both models are high and the input coefficients are highly significant on both. We will also plot the models on top of our data.
 
-```{r echo = FALSE, message = FALSE, warning = FALSE}
+```{r echo = FALSE, message = FALSE, warning = FALSE,fig.width=8, fig.height=4}
 fit_linear_plot <- augment(fit_linear)%>%
   ggplot(aes(x = index)) +
   geom_line(aes(y = value, colour = "Data")) +
@@ -189,6 +210,9 @@ From these plots, both models seem to do a similar job fitting the data but fail
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_linear %>% gg_tsresiduals() + labs(title = "Linear Residuals") 
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_linear_log %>% gg_tsresiduals() + labs(title = "Log Linear Residuals") 
 ```
 
@@ -216,6 +240,8 @@ Box.test(linear_log_residuals, lag = 10, type = "Ljung-Box")
 ```
 
 Based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data (likely the seasonality).
+
+### Explaining variance with quadradic trend models
 
 Let's repeat this process with a quadratic trend model to see if this model accounts for additional variance in our process.
 
@@ -321,6 +347,9 @@ From these plots, both models seem to do a similar job fitting the data and, unl
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_season %>% gg_tsresiduals() + labs(title = "Quadratic Season Residuals") 
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_log_season %>% gg_tsresiduals() + labs(title = "Log Quadratic Season Residuals") 
 ```
 
@@ -345,6 +374,8 @@ Box.test(quadratic_log_season_residuals, lag = 10, type = "Ljung-Box")
 
 As before, based on the Ljung Box test, we can reject the null that the data is independently distributed up to 10 lags, which means that we likely do not have white noise residuals and both our models are failing to account for some variance in our data. This is somewhat surprising as our residuals are quite small, especially in comparison to our previous models. Let's compare the BIC of the quadratic seasonal model without the log transform to our previous BICs.
 
+### Model selection
+
 Let's compare the BIC of this model against the pure linear and quadratic models without seasonal components.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
@@ -353,6 +384,8 @@ glance(fit_quadratic_season) %>%
 ```
 
 The BIC for our quadratic seasonal model is much smaller than the BICs for either our linear or quadratic model, and by this criteria is our best model that we have fit so far. Let's use this model to generate forecasts to the year 2020.
+
+### Forecasts based on models
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 future_df <- new_data(co2_df, n=23 * 12)
@@ -508,10 +541,17 @@ fit1
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 resid <- residuals(fit1)
-autoplot(resid)
-ggAcf(resid)
+residuals_plot <- autoplot(resid) + labs(title="Time Series of Residuals")
+acf_plot <- ggAcf(resid) + labs(title="ACF of Residuals")
+
+
+(residuals_plot / acf_plot)
+```
+
+```{r}
 
 Box.test(resid,lag=10, fitdf=0, type="Lj")
+
 ```
 
 The ACF plot indicates that the residuals are following a white noise process as each autocorrelation is close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 8. Additionally, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data.
@@ -645,12 +685,17 @@ co2_fc  %>%
   ) +
   guides(colour = guide_legend(title = "Forecast"))
 
+
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_arima %>% 
   gg_tsresiduals(lag_max = 16)
+```
 
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 augment(fit_arima) %>%
   features(.innov, ljung_box, lag = 16, dof = 6)
-
 ```
 
 
@@ -682,20 +727,20 @@ theme_set(theme_minimal())
 knitr::opts_chunk$set(dpi=1000)
 ```
 
-## (1 point) Task 0b: Introduction 
+## Introduction 
 
 We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
 
-We assume that the collection process for both datasets is identical.
+We assume that the collection process for both datasets is identical.  On the website of the National Oceanic and Atmospheric Administration there is a note that the data collection process may have changed a
 
 It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
 
 
-## (3 points) Task 1b: Create a modern data pipeline for Mona Loa CO2 data.
+## Create a modern data pipeline for Mona Loa CO2 data.
 
 As instructed we pulled created a pipeline to pull down the weekly Mona Loa CO2 data.
 
-Within the dataset the weeks ending on dates; 2008-06-29, 2008-07-06 , 2008-07-13 , 2005-10-16, contained the measurement value -999.99, which cannot be accurate.  We "stubbed" those four dates with values similar to the weekly values for the weeks directly before or after.  We did not remove those data outright as doing so could cause problems within the utilization of the timeseries downstream.  
+Within the dataset the weeks ending on dates; 2008-06-29, 2008-07-06 , 2008-07-13 , 2005-10-16, contained the measurement value -999.99, which cannot be accurate.  We "stubbed" those four dates with values similar to the weekly values for the weeks directly before or after.  We did not remove those data outright as doing so could cause problems within the utilization of the time series downstream.  
 
 
 ```{r echo = FALSE, message = FALSE, warning=FALSE}
@@ -1098,10 +1143,11 @@ pp.test(trModel$residuals, alternative="stationary")
 
 Despite the fact that the ADF and PP tests indicate the data series is stationary, our visual analysis of this data set suggests that it is non-stationary as its mean is increasing over time.  We will ignore the ADF and PP test results as they can sometimes be of low power.
 
-## (1 point) Task 2b: Compare linear model forecasts against realized CO2
+## Compare linear model forecasts against realized CO2
 
 In section 1 we fit two models, one linear model and one quadratic model.  In this section we're going to compare both models to the "present" data set and see how well they predict future data.
 
+### Simple linear model with no polynomial terms or seasonality
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
 
@@ -1137,8 +1183,9 @@ data_and_lm_prediction_overlay <- fit_linear %>%
 
 The simple linear model above which uses only trend as a coefficient has a slope that is too shallow to be useful in prediction.
 
-Below, we utilize a model with polynomial terms and seasonality.
+### Quadradic model with polynomial terms and seasonality
 
+Below, we utilize a model with polynomial terms and seasonality.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
 
@@ -1181,7 +1228,7 @@ We predict 23 years from Dec 31, 1997, which means the predict values are throug
 
 The linear model is very accurate.
 
-## (1 point) Task 3b: Compare ARIMA models forecasts against realized CO2  
+## Compare ARIMA models forecasts against realized CO2  
 
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
@@ -1218,11 +1265,12 @@ arima_prediction_based_on_1997_data<-co2_ts %>%
 #data_and_arima_prediction_overlay
 
 ```
-In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting ARIMA model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  The overlay shows a divergence between predicted ARIMA values and the actual trend.  
+
+In the top-left graph, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting ARIMA model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  The overlay shows a divergence between predicted ARIMA values and the actual trend.  
 
 We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
 
-The ARIMA model does not predict as accurately as the linear model.
+The ARIMA model does not predict as accurately as the quadradic model.
 
 To demonstrate this we graph both on top of one another below.
 

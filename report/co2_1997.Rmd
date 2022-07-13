@@ -1081,9 +1081,9 @@ checkresiduals(trModel)
 
 Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending, and appear to be normally distributed.
 
-Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
+The oscillating ADF appears to show seasonality.
 
-#Todo -- add note that there is seasonality in here.
+Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
 
 H0: The data are not stationary
 HA: The data are stationary
@@ -1099,6 +1099,46 @@ pp.test(trModel$residuals, alternative="stationary")
 Despite the fact that the ADF and PP tests indicate the data series is stationary, our visual analysis of this data set suggests that it is non-stationary as its mean is increasing over time.  We will ignore the ADF and PP test results as they can sometimes be of low power.
 
 ## (1 point) Task 2b: Compare linear model forecasts against realized CO2
+
+In section 1 we fit two models, one linear model and one quadratic model.  In this section we're going to compare both models to the "present" data set and see how well they predict future data.
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
+future_df <- new_data(co2_ts, n=23 * 12)
+
+fit_linear <- co2_ts %>%
+  model(trend_model = TSLM(value ~ trend()))
+
+lm_prediction_based_on_1997_data <- fit_linear %>%
+  forecast(new_data = future_df) %>%
+  autoplot() +  
+  labs(
+    title = TeX(r'(Predicted Monthly Mean $CO_2$)'),
+    subtitle = "Linear Model ",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+data_and_lm_prediction_overlay <- fit_linear %>%
+  forecast(new_data = future_df) %>%
+  autoplot(co2_present) +  
+  labs(
+    title = TeX(r'(Weekly Mean $CO_2$)'),
+    subtitle = "(Series, with Linear Prediction Overlay)",
+    x = 'Month and Year',
+    y = TeX(r'($CO_2$ parts per million)')
+  )
+
+(plot_present | lm_prediction_based_on_1997_data) /
+  data_and_lm_prediction_overlay
+
+```
+
+The simple linear model above which uses only trend as a coefficient has a slope that is too shallow to be useful in prediction.
+
+Below, we utilize a model with polynomial terms and seasonality.
+
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
 
@@ -1125,7 +1165,7 @@ data_and_lm_prediction_overlay <- fit_quadratic_season %>%
   autoplot(co2_present) +  
   labs(
     title = TeX(r'(Weekly Mean $CO_2$)'),
-    subtitle = "(Series, with Linear Prediction Overlay)",
+    subtitle = "(Series, with Quadratic Prediction Overlay)",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
   )
@@ -1135,7 +1175,7 @@ data_and_lm_prediction_overlay <- fit_quadratic_season %>%
 
 ```
 
-In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting linear model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting model with polynomial terms and seasonality, model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
 
 We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
 

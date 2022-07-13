@@ -501,7 +501,7 @@ resid <- residuals(fit1)
 autoplot(resid)
 ggAcf(resid)
 
-Box.test(resid$.resid, lag=10, fitdf=0, type="Lj")
+Box.test(resid, lag=10, fitdf=0, type="Lj")
 ```
 The ACF plot indicates that the residuals are following a white noise process as each autocorrelation is close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 9. Additionally, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data.
 
@@ -642,6 +642,32 @@ augment(fit_arima) %>%
 
 
 # PRESENT
+```{r load packages, echo = FALSE, message = FALSE, warning=FALSE}
+
+list.of.packages <- c("latex2exp")
+
+
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+library(tidyverse)
+library(tsibble)
+library(latex2exp)
+library(magrittr)
+library(patchwork)
+library(lubridate)
+library(feasts)
+library(forecast)
+library(zoo)
+library(fable)
+library(sandwich)
+library(lmtest)
+library(tseries)
+library(gridExtra)
+
+theme_set(theme_minimal())
+knitr::opts_chunk$set(dpi=1000)
+```
+
 ## (1 point) Task 0b: Introduction 
 
 We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
@@ -650,14 +676,21 @@ We assume that the collection process for both datasets is identical.
 
 It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
 
+
 ## (3 points) Task 1b: Create a modern data pipeline for Mona Loa CO2 data.
 
+As instructed we pulled created a pipeline to pull down the weekly Mona Loa CO2 data.
 
-```{r echo = FALSE, message = FALSE}
+Within the dataset the weeks ending on dates; 2008-06-29, 2008-07-06 , 2008-07-13 , 2005-10-16, contained the measurement value -999.99, which cannot be accurate.  We "stubbed" those four dates with values similar to the weekly values for the weeks directly before or after.  We did not remove those data outright as doing so could cause problems within the utilization of the timeseries downstream.  
+
+
+```{r echo = FALSE, message = FALSE, warming=FALSE}
 
 #Create a data pipeline that starts by reading from the appropriate URL, and ends by saving an object called `co2_present` that is a suitable time series object. #load from National Oceanic and Atmospheric Web site.
 #filter, mutate, and turn into tsibble object
-co2_present <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt') %>%
+
+#Grab Monthly Data -- May not use this.
+co2_present_monthly <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt') %>%
   filter(V1 >= 1998)%>%
   mutate(index = yearmonth(as.yearmon(paste(V1, V2), "%Y %m"))) %>%
   mutate(value = V4) %>%
@@ -665,7 +698,49 @@ co2_present <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_m
   dplyr::select(c("index","value","log_value")) %>%
   as_tsibble(index=index)
 
+#In Examining this data there are two perios where collections are incorrect on a weekly basis.
+# 1.  Period 
+#545 2008-06-08 387.74 5.960335
+#546 2008-06-15 388.11 5.961289
+#547 2008-06-22 387.53 5.959793
+#548 2008-06-29 -999.99 NaN
+#549 2008-07-06 -999.99 NaN
+#550 2008-07-13 -999.99 NaN
+#    2005-10-16 -999.99 NaN
+#
+#Grab weekly data
+co2_present <- read.table('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.txt') %>%
+  filter(V1 >= 1998)%>%
+  mutate(index = as.Date(as.Date(paste(V1,V2,V3, sep="-")) )) %>%
+  mutate(value = V5) %>%
+  filter(value > 200) %>%
+  mutate(log_value = log(value)) %>% 
+  dplyr::select(c("index","value","log_value"))
+  
+
+#dates I'm manually putting values in.
+index <- as.Date(c('2008-06-29','2008-07-06','2008-07-13','2005-10-16'))
+value <- c(387.74,388.11,387.53,377.5)
+log_value <- log(value)
+df_insert <- data.frame(index,value,log_value)
+
+co2_present <- bind_rows(
+  co2_present,
+  df_insert
+) %>% as_tsibble(index=index)
+
+#Aggregate the weekly to monthly
+co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
+  filter(year(index) >= 1998)%>%
+  mutate(index = yearmonth(index)) %>%
+  group_by(index)  %>% 
+  summarize(value=mean(value))  %>% 
+  mutate(log_value = log(value)) %>% 
+  dplyr::select(c("index","value","log_value")) %>%
+  as_tsibble(index=index)
+
 ```
+
 
 ```{r echo = FALSE, message = FALSE}
 
@@ -694,7 +769,7 @@ plot_present <- co2_present %>%
   aes(x=index, y=value) + 
   geom_line(color = 'steelblue') +
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
+    title = TeX(r'(Weekly Mean $CO_2$)'),
     subtitle = " 1998 through Present",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
@@ -703,7 +778,8 @@ hist_present <- co2_present %>%
   ggplot(aes(x=value)) + geom_histogram(bins=8) + labs(title="Histogram 1998 through Present")
 acf_present <- ggAcf(co2_present$value, lag.max=(15*12)) + labs(title="ACF 1998 through Present")
 pacf_present <- ggPacf(co2_present$value, lag.max=(15*12)) + labs(title="PACF 1998 through Present")
-
+#acf_present
+#pacf_present
 plot_present + acf_present + hist_present + pacf_present + plot_layout(design = "
 AAAAACCCC
 AAAAACCCC
@@ -713,13 +789,15 @@ DDDDDCCCC
 DDDDDCCCC
 ")
 
+
+
 ```
 
 As with the "1997" dataset, we see a clear increasing trend with the same seasonal "wave" pattern.  Seasonal fluctuation does not appear to increase with time, suggesting, again, that an additive model explains the decomposition in this series.  The time series is not stationary, as its mean increases.  Variance presents as constant.
 
-The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot crosses the significance line at close to 100.  As mentioned above, this "present" dataset contains only 24 years, as opposed to 39, which is possibly the cause of this cross in the significance line at close to 100.
+The ACF displays a slow, over-time, decline consistent with a trending time series.  While the ACF plot of the "1997" plot remains above the significance line until lag 140, this ACF plot never crosses the significance line.  
 
-The PACF has a large positive spike at lag 1, followed by a smaller negative spike at log 2, then oscillates between positive and negative lags with progressively lower levels of significance.
+The PACF of this time series has a strong postive spike a lag 1 followed by a pattern consistant with partial autocorrelation.
 
 Our histogram of has no values lower than 365, or nigher than 421, and that these values are not normally distributed.
 
@@ -742,7 +820,8 @@ We take only the last 293 months of the "1997" dataset and graph it on the same 
 
 ```{r echo = FALSE, message = FALSE}
 
-co2_df <-
+
+co2_df_1 <-
   co2_ts %>%
   mutate(id = row_number())  %>%
   filter(id > 175) %>%
@@ -752,15 +831,15 @@ co2_df <-
   #dplyr::select("id","1972 through 1997")
 
 co2_present_df <-
-  as.data.frame(co2_present) %>%
+  as.data.frame(co2_present_weekly_agg_monthly) %>%
   mutate(id = row_number()) %>%
   #mutate("1997 through present"=value) %>%
   dplyr::select("id","value")
 
-min_1997 = min(co2_df[,2], na.rm=T)
+min_1997 = min(co2_df_1[,2], na.rm=T)
 min_present = min(co2_present_df[,2], na.rm=T)
 
-max_1997 = max(co2_df[,2], na.rm=T)
+max_1997 = max(co2_df_1[,2], na.rm=T)
 max_present = max(co2_present_df[,2], na.rm=T)
 
 delta_1997 = max_1997 - min_1997
@@ -771,7 +850,7 @@ delta_between_periods = delta_present - delta_1997
 
 
 ochart_1 <- ggplot() +
-   geom_line(data=co2_df,
+   geom_line(data=co2_df_1,
              aes(x=id,y=value, color="1973 through 1997"),
              size=1.2) +
    geom_line(data=co2_present_df,
@@ -796,21 +875,22 @@ We apply the same "parsing" of the original "1997" dataset and compare the parse
 
 ```{r echo = FALSE, message = FALSE}
 
-acf_1997 <- ggAcf(co2_df$value, lag.max=(15*12)) + labs(title="ACF 1973 through 1997")
-pacf_1997 <- ggPacf(co2_df$value, lag.max=(15*12)) + labs(title="PACF 1973 through 1997")
+acf_1997 <- ggAcf(co2_df_1$value, lag.max=(15*12)) + labs(title="ACF (monthly avg) 1973 to 1997")
+pacf_1997 <- ggPacf(co2_df_1$value, lag.max=(15*12)) + labs(title="PACF (monthly avg) 1973 to 1997")
 
-   (acf_1997 | acf_present) /
-   (pacf_1997 | pacf_present)  +
+   (acf_1997 | acf_present + labs(title="ACF (weekly avg) 1998 to Present")) /
+   (pacf_1997 | pacf_present + labs(title="PACF (weekly avg) 1998 to Present"))  +
   plot_annotation(
       title    = 'ACF and PACF comparison',
     #  subtitle = 'Could be Random Walk',
       tag_levels = 'A')  
 
 ```
-
-Parsing the "1997" dataset to include 293 months only yields a ACF which crosses the significance line at about the same lag as the ACF plot of the "present" dataset does.  We notice that the degree of oscillation on the "1997" ACF is greater than the degree of osilation on the "present" dataset.
+Parsing the "1997" dataset, to include 293 months only, yields a ACF which crosses the significance line 100, while the weekly data does not cross the significance line.  We notice that the amplitude of oscillation on the "1997" datasets' ACF, is greater than the amplitude of oscillation in the "present" dataset's ACF.
 
 Next we examine the seasonality of the "present" comparing it to the "1997" seasonality.
+
+In order to the present dataset's seasonality 1997 seasonality we aggregate values within the weekly dataset to monthly values, for the purpose of this comparison.
 
 ```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=5, warning=FALSE}
 
@@ -818,7 +898,7 @@ df_3_year_season_org <- co2_ts %>%
   filter(year(index)>= 1993)%>%
   select("index","value")
 
-co2_present_no_log <- co2_present %>%
+co2_present_no_log <- co2_present_weekly_agg_monthly %>%
   filter(year(index)>= 2017)%>%
   select("index","value")
 
@@ -845,8 +925,7 @@ We next compare the two subseries graphs looking at each dataset.
 
 ```{r echo = FALSE, message = FALSE, fig.width=6, fig.height=4, warning=FALSE}
 
-
-co2_df_ts <-
+co2_df_1_ts <-
   co2_ts %>%
   mutate(id = row_number())  %>%
   filter(id > 175) %>%
@@ -854,7 +933,7 @@ co2_df_ts <-
   dplyr::select("index","value")  %>%
   as_tsibble()
 
-subseries_1997 <- ggsubseriesplot(x = as.ts(co2_df_ts)) +
+subseries_1997 <- ggsubseriesplot(x = as.ts(co2_df_1_ts)) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$ 1973 through 1997)'))
 
@@ -877,9 +956,11 @@ That is to say the seasonality effect shows a noticeable increase in the magnitu
 
 We now remove the seasonal fluctuations in both datasets and graph the increase in atmospheric CO2 PPM.
 
+In order to do this we aggregate our weekly data to monthly data in order to compare on the same scales.
+
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=3}
 
-co2_df <-
+co2_df_1 <-
   co2_ts %>%
   mutate(id = row_number())  %>%
   filter(id > 175) %>%
@@ -891,7 +972,7 @@ co2_df <-
   dplyr::select("id","avg_value")
   #dplyr::select("id","1972 through 1997")
 
-co2_present_df <- co2_present %>%
+co2_present_df <- co2_present_weekly_agg_monthly %>%
   mutate(year = year(index))  %>%
   index_by(year) %>%
   summarise(avg_value = (sum(value)/12)) %>%  
@@ -901,7 +982,7 @@ co2_present_df <- co2_present %>%
 
 
 ochart_2 <- ggplot() +
-   geom_line(data=co2_df,
+   geom_line(data=co2_df_1,
              aes(x=id,y=avg_value, color="1973 through 1997"),
              size=1.2) +
    geom_line(data=co2_present_df,
@@ -925,7 +1006,7 @@ We now perform additive and multiplicative decomposition to remove the trend and
 
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=7.5, fig.height=6}
-co2_present <- co2_present %>%
+co2_present_monthly <- co2_present %>%
   mutate(log_value = log(value))
 
 dcmp_add <- co2_present %>%
@@ -946,7 +1027,7 @@ log_residuals <- components(dcmp_multi) %>%
 grid.arrange(decomp, residuals, log_decomp, log_residuals, nrow = 2, ncol = 2)
 ```
 
-These graphs confirm that the time series is trending upwards.  In the additive decomposition plots (top left), we see that seasonal fluxuations increase over time.  This confirms our side-by-side graph above showing the increase in seasonal fluctuations between the two time series.
+These graphs confirm that the time series is trending upwards.  In the additive decomposition plots (top left), we see that seasonal fluctuations increase over time.  This confirms our side-by-side graph above showing the increase in seasonal fluctuations between the two time series.
 
 The multiplicative "season_year" decomposition graph is stable, and not visibly increasing.  This means like the "1997" time series, the "present" time series may be multiplicative.
 
@@ -979,13 +1060,16 @@ We should note that the tests above are testing whether the time series are diff
 library(lmtest)
 
 trModel <- lm(co2_present_ts ~ c(1:length(co2_present_ts)))
-plot.ts(residuals(trModel))
+
+checkresiduals(trModel) 
 
 ```
 
-Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending.
+Graphing the residuals appears to show a mean reverting process.  That is to say the residuals are stationary and not trending, and appear to be normally distributed.
 
 Finally, we run an ADF and PP test on the residuals, and we again, see that the null hypothesis of non-trend-stationary can be ignored.
+
+#Todo -- add note that there is seasonality in here.
 
 H0: The data are not stationary
 HA: The data are stationary
@@ -1026,7 +1110,7 @@ data_and_lm_prediction_overlay <- fit_quadratic_season %>%
   forecast(new_data = future_df) %>%
   autoplot(co2_present) +  
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
+    title = TeX(r'(Weekly Mean $CO_2$)'),
     subtitle = "(Series, with Linear Prediction Overlay)",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
@@ -1046,7 +1130,10 @@ The linear model is very accurate.
 ## (1 point) Task 3b: Compare ARIMA models forecasts against realized CO2  
 
 
+
+
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
+
 
 future_d <- new_data(co2_ts, n=23 * 12)
 
@@ -1055,7 +1142,7 @@ data_and_arima_prediction_overlay <- co2_ts %>%
   forecast(new_data = future_d) %>%
   autoplot(co2_present)  +
   labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
+    title = TeX(r'(Weekly Mean $CO_2$)'),
     subtitle = "(Series, with ARIMA Prediction Overlay)",
     x = 'Month and Year',
     y = TeX(r'($CO_2$ parts per million)')
@@ -1087,12 +1174,13 @@ The linear model does not predict as accurately as the linear model.
 
 To demonstrate this we graph both on top of one another below.
 
+
 ```{r echo = FALSE, message = FALSE, warning = FALSE, fig.width=6, fig.height=6}
 
-data_and_lm_prediction_overlay /
+data_and_lm_prediction_overlay / 
   data_and_arima_prediction_overlay
-```
 
+```   
 ## Evaluate the performance of 1997 linear and ARIMA models
 
 In 1997 you made predictions about the first time that CO2 would cross 420 ppm. How close were your

@@ -501,7 +501,7 @@ resid <- residuals(fit1)
 autoplot(resid)
 ggAcf(resid)
 
-Box.test(resid$.resid,lag=10, fitdf=0, type="Lj")
+Box.test(resid$.resid, lag=10, fitdf=0, type="Lj")
 ```
 The ACF plot indicates that the residuals are following a white noise process as each autocorrelation is close to zero and 95% of spikes lie within significance thresholds. There is one small but significant spike at lag 9. Additionally, since the p-value from the Box-Ljung test is greater than 0.05, we fail to reject the null hypothesis and conclude that there is no serial correlation in the data.
 
@@ -1093,7 +1093,7 @@ data_and_lm_prediction_overlay /
   data_and_arima_prediction_overlay
 ```
 
-## Task 4b: Evaluate the performance of 1997 linear and ARIMA models
+## Evaluate the performance of 1997 linear and ARIMA models
 
 In 1997 you made predictions about the first time that CO2 would cross 420 ppm. How close were your
 models to the truth?
@@ -1103,8 +1103,9 @@ of your models from Parts 2a and 3b over the entire period. (You should conduct 
 
 ```{r, message=FALSE, echo=FALSE}
 # display TS for atmospheric co2 for when we crossed 420ppm
-# suggests 2021-04-25, different from forecasted april 2023 from 1997 and was not within our interval of April 2022 - December 2100
-head(co2_present %>% filter(value>=420)) 
+# suggests 2022-04-25, different from forecasted april 2022 from 1997 and was not within our interval of April 2022 - December 2100
+head(co2_present %>% filter(value>=420))
+
 # aggregation
 co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
   filter(year(index) >= 1998)%>%
@@ -1114,26 +1115,37 @@ co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
   mutate(log_value = log(value)) %>%
   dplyr::select(c("index","value","log_value")) %>%
   as_tsibble(index=index)
+
 ```
 
-````{r, message=FALSE, echo=FALSE}
+````{r, message=FALSE, echo=FALSE, warning=FALSE}
 # model chosen form 2a
+
+forecast420ppm <- forecast_df %>%
+ filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
+
+min(forecast420ppm$time_index) 
+max(forecast420ppm$time_index)
+
+
+fit_linear_2a = fit_linear
+predictions_2a <- forecast(fit_linear, h = 1000)
+accuracy_lm = accuracy(predictions_2a, co2_present_weekly_agg_monthly)
+accuracy_lm
+pe_420 = predictions_2a %>% filter(.mean>420)
+pe_420 = pe_420[index= min(index)]
+```
+
+````{r,message=FALSE, echo=FALSE, warning=FALSE}
+# first fit model 3a
 
 fit1 <- co2_df %>%
   model(
   arima_fit = ARIMA(value~0+pdq(0,1,3)+PDQ(0,1,1, period=12)),
-  ) 
+  )
 
-fit_linear_2a = fit1
-predictions_2a <- forecast(fit_linear, h = 25*12)
-accuracy_lm = accuracy(predictions_2a, co2_present_weekly_agg_monthly)
-accuracy_lm
-```
-
-````{r,message=FALSE, echo=FALSE}
-# first fit model 3a
 fit_3a = fit1
-predictions_3a_pf <- forecast(fit_3a, h=25*12)
+predictions_3a_pf <- forecast(fit_3a, h=25*12, level=c(95))
 
 accuracy_arima = accuracy(predictions_3a_pf, co2_present_weekly_agg_monthly)
 accuracy_arima
@@ -1161,6 +1173,7 @@ nsa_co2_present_train <- co2_present_weekly_agg_monthly %>%
   filter(index < as.Date("2020-01-01"))
 
 ```
+
 ### Seasonally adjusted data assessment
 
 Now that we have all of our necessary data, let's get to creating models for both. First let's assess the number of differences needed for the seasonally adjusted data to be stationary, since this data already has the season component stripped out, we know there are no seasonal differences needed. Let's also assess the acf and pacf.

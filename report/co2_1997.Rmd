@@ -2,6 +2,8 @@
 output:
   pdf_document: default
   html_document: default
+title: "Atmospheric CO2 Comprehensive Analysis"
+author: "Aastha Khana, Eda Kavlakoglu, Don Irwin, Ben Mok"
 ---
 
 # Report from the Point of View of 1997 
@@ -15,7 +17,7 @@ This finding is incredibly important, because the rising rate of CO2 has implica
 In the analysis below, we will confirm the trends identified above by Keeling himself and use this data to fit a model to make a forecast of CO2 levels in the future.
 
 ## Exploratory Data Analysis
-```{r load packages, echo = FALSE, message = FALSE, warning=FALSE, warn = FALSE}
+```{r load packages 1997, echo = FALSE, message = FALSE, warning=FALSE, warn = FALSE}
 library(tidyverse)
 library(tsibble)
 library(latex2exp)
@@ -1319,8 +1321,8 @@ Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift
 Now that we have our model, let's check the residuals for stationarity.
 ```{r Resid TS and resid ACF, echo=FALSE, message=FALSE, warning=FALSE}
 sa_resid = residuals(sa_our_model)
-autoplot(sa_resid) /
-ggAcf(sa_resid)
+(autoplot(sa_resid) +  labs(title="Residual Plot SA Model")) /
+(ggAcf(sa_resid) +  labs(title="ACF Plot SA Model"))
 ```
 ```{r box jung, echo=FALSE, message=FALSE, warning=FALSE}
 Box.test(sa_resid,lag=15, fitdf=0, type="Lj")
@@ -1362,12 +1364,17 @@ nsa_our_model = Arima(nsa_co2_present_train$value, order=c(1,1,2), seasonal=list
 Observing the above summaries of both estimated models: the BIC is lower in the automatically generated model $ARIMA(1,1,2)(0,1,1)[12]$. We also observe that our assessments were correct and not too far off from what the auto ARIMA call concluded with. Because we are using BIC as the main criteria of model selection, we will select the algorithmically computed model as our model ($ARIMA(1,1,2)(0,1,1)[12]$) of interest.
 
 Next, we should check the residuals and run tests on the model we have estimated.
+
 ```{r, echo=FALSE, message=FALSE}
 nsa_resid = residuals(nsa_our_model)
-autoplot(nsa_resid) /
-ggAcf(nsa_resid)
-Box.test(nsa_resid$.resid,lag=15, fitdf=0, type="Lj")
+(autoplot(nsa_resid) + labs(title="Residual Plot NSA Model")) /
+(ggAcf(nsa_resid) + labs(title="ACF Plot NSA Model"))
 ```
+
+```{r,echo=FALSE, message=FALSE}
+Box.test(nsa_resid,lag=15, fitdf=0, type="Lj")
+```
+
 From the results of the ACF of residuals, we observe that all lags are within the significant 95% threshold which means it closely resembles that of a white noise. The time series plot of the residuals loosely resemble that of a white noise, with fluctuations floating around 0 and very rarely crossing 1 and -1. From the Ljung-Box test, we observe a p-value that is higher than 0.05 critical value, leading us to reject the null hypothesis and conclude that there is no correlation within our time series. 
 
 From these results we will continue with using $ARIMA(1,1,1)$ for our seasonally adjusted time series, and $ARIMA(1,1,2)(0,1,1)[12]$ for our non-seasonally adjusted time series.
@@ -1381,7 +1388,7 @@ With creating and assessing the goodness of fit of so many models, we'd also lik
 * And finally, we will also train a polynomial time-trend model to the seasonally adjusted series and run the same accuracy computations as previous models.
 
 Here are the cross validation results of the seasonally adjusted time series:
-````{r, message=FALSE, echo=FALSE}
+```{r, message=FALSE, echo=FALSE}
 # compute predictions and assess accuracy
 sa_predictions <- forecast(sa_our_model, h = 2*12+7)
 sa_accuracy = accuracy(sa_predictions, sa_co2_present_test$season_adjust)
@@ -1389,10 +1396,10 @@ sa_accuracy
 ```
 
 And below are the cross validation results of the non-seasonally adjusted time series:
-````{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
+```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
 # compute predictions and assess accuracy
 nsa_predictions <- forecast(nsa_our_model, h = 2*12+7)
-nsa_accuracy = accuracy(nsa_predictions$.mean, nsa_co2_present_test$value)
+nsa_accuracy = accuracy(nsa_predictions, nsa_co2_present_test$value)
 nsa_accuracy
 ```
 
@@ -1491,9 +1498,9 @@ sa_fit_quadratic <- sa_co2_present_train %>%
 
 sa_fit_quadratic %>% report()
 
-sa_quad_preds <- sa_fit_quadratic %>% forecast(new_datadata=future_d)
-sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
-
+# the forecast call is erring out :/
+#sa_quad_preds <- sa_fit_quadratic %>% forecast(new_datadata=future_d)
+#sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
 ```
 # TODO
 

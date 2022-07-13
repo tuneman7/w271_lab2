@@ -51,6 +51,7 @@ knitr::opts_chunk$set(dpi=1000)
 ```
 
 ```{r plot the keeling curve, echo = FALSE}
+
 tsibble::as_tsibble(co2) %>%
   ggplot() + 
   aes(x=index, y=value) + 
@@ -153,48 +154,11 @@ Following all appropriate steps, choose an ARIMA model to fit to the series. Dis
 #check for stationarity 
 adf.test(co2_df$value, alternative = "stationary", k=5) #reports stationary series; contradicts EDA plots
 
-#differenced data: order 1
-co2_df_2 <- co2_df %>%
-  mutate(diff_co2 = difference(value)) 
+#seasonal differenced
+co2_s_diff <- co2_df %>%
+  mutate(diff_co2 = difference(value, 12)) 
 
-#differenced data:order 2
-co2_df_3 <- co2_df_2  %>%
-  mutate(two_diff_co2 = difference(diff_co2)) 
-
-#EDA pt2 
-plot2 <- co2_df_2 %>%
-  ggplot + 
-  aes(x=index, y=diff_co2) + 
-  geom_line(color = 'steelblue') +
-  labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
-    x = 'Month and Year',
-    y = TeX(r'($CO_2$ parts per million)')
-  )
-
-plot3 <- co2_df_3 %>%
-  ggplot + 
-  aes(x=index, y=two_diff_co2) + 
-  geom_line(color = 'steelblue') +
-  labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
-    x = 'Month and Year',
-    y = TeX(r'($CO_2$ parts per million)')
-  )
-
-plot3
-
-#seasonal differencing
-co2_df %>%
-  mutate(diff_co2 = difference(value, 12)) %>%
-  ggplot + 
-  aes(x=index, y=diff_co2 ) + 
-  geom_line(color = 'steelblue') +
-  labs(
-    title = TeX(r'(Monthly Mean $CO_2$)'),
-    x = 'Month and Year',
-    y = TeX(r'($CO_2$ parts per million)')
-  )
+co2_s_diff
 
 #better plot for seasonal differencing (9.9 in textbook)
 co2_df %>%
@@ -216,6 +180,9 @@ co2_df %>%
 co2_df %>%
   features(value, unitroot_ndiffs)
 
+co2_s_diff %>%
+  features(value, unitroot_ndiffs)
+
 #test need for seasonal differencing; indicating one seasonal difference is required
 co2_df %>%
   features(value, unitroot_nsdiffs)
@@ -233,16 +200,27 @@ pacf2
 
 #seasonal differencing -- how do you know when to log? vs use double differencing?
 
+fit1 <- arima(co2_df$value, order = c(2,1,1), seasonal= list(order = c(2,1,1), period = 12))
+fit1
+fit2 <-  arima(co2_df$value, order = c(1,1,1), seasonal= list(order = c(2,1,1), period = 12))
+fit2
+fit3 <- arima(co2_df$value, order = c(2,1,4), seasonal= list(order = c(2,1,1), period = 12))
+fit3
+
+
+
+auto.arima(co2_s_diff$value, ic = "aic")
+
 #model
-co2_ARIMA <- co2_df %>%
-  model(ARIMA(value ~ 1 + pdq(1:10,0:2,1:10) + PDQ(0,0,0), ic="aic", stepwise=F, greedy=F)) %>%
+co2_ARIMA <- co2_s_diff %>%
+  model(ARIMA(value ~ 1 + pdq(1:20,0:2,1:20) + PDQ(0,0,0), ic="aic", stepwise=F, greedy=F)) %>%
   report()
 
 co2_ARIMA 
 
 #model diagnostic plots
 fit <- arima(co2_df$value, c(2,1,4))
-resid <- residuals(fit)
+resid <- residuals(fit3)
 autoplot(resid)
 ggAcf(resid)
 
@@ -253,6 +231,8 @@ Box.test(resid, lag = 10, type = "Ljung-Box")
 
 -Unit root test: The test statistic (7.81) is bigger than the 1% critical value, so the p-value is less than 0.01, indicating that the null hypothesis is rejected.That is, the data are not stationary.
 -KPSS tests indicate that only 1 order differencing is needed to transform the data into a stationary series.
+
+When observing the ACF plot, the both the seasonal and seasonally differences series show a gradual decay, which is indicative of an AR model. However, when we observe the PACF, an oscillating pattern emerges, which is characteristic of an MA model.  
 
 -While residuals appear to look like white noise, all autocorrelations are not within threshold limits, indicating that there is likely a better fit for this model. To confirm this, we can use the Ljung Box test. Since the p-value is less than 0.05, we reject the null hypothesis and conclude that there is serial correlation in the data.
 

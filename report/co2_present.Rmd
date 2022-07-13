@@ -1209,19 +1209,14 @@ co2_present_weekly_agg_monthly <- as.data.frame(co2_present) %>%
 ````{r, message=FALSE, echo=FALSE, warning=FALSE}
 # model chosen form 2a
 
-forecast420ppm <- forecast_df %>%
- filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
-
-min(forecast420ppm$time_index) 
-max(forecast420ppm$time_index)
-
-
 fit_linear_2a = fit_linear
 predictions_2a <- forecast(fit_linear, h = 1000)
 accuracy_lm = accuracy(predictions_2a, co2_present_weekly_agg_monthly)
 accuracy_lm
-pe_420 = predictions_2a %>% filter(.mean>420)
-pe_420 = pe_420[index= min(index)]
+
+pe_420 = predictions_2a %>% filter(.mean>=420)
+pe_420 = min(pe_420$index)
+sprintf("Point Forecast LM: %s",pe_420)
 ```
 
 ````{r,message=FALSE, echo=FALSE, warning=FALSE}
@@ -1380,8 +1375,8 @@ sa_fit_quadratic <- sa_co2_present_test %>%
   model(trend_model = TSLM(season_adjust ~ trend + I(trend^2)))
 sa_fit_quadratic %>% report()
 
-sa_quad_preds <- forecast(sa_fit_quadratic, h=31)
-sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
+#sa_quad_preds <- forecast(sa_fit_quadratic, h=31)
+#sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
 ```
 
 

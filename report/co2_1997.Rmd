@@ -398,7 +398,7 @@ Now, let's choose an ARIMA model to fit to the CO2 data. Recall that our EDA ind
 
 * slowly decaying ACF plot, indicative of an AR process
 
-* oscillating PCAF plot, indicative of an MA process
+* oscillating PACF plot, indicative of an MA process
 
 * seasonal data
 

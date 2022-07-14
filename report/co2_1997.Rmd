@@ -625,18 +625,26 @@ colnames(forecast_df )[4] <- "high_95"
 forecast420ppm <- forecast_df %>%
  filter(round(point_forecast,0) == 420 | round(lo_95,0) == 420 | round(high_95,0) == 420)
 
-min(forecast420ppm$time_index) 
-max(forecast420ppm$time_index)
+pe420_min <- min(forecast420ppm$time_index) 
+sprintf("Earliest 420ppm Point Estimate: %s", pe420_min)
 
-max(forecast420ppm$time_index) - min(forecast420ppm$time_index) 
+pe420_max <-max(forecast420ppm$time_index)
+sprintf("Latest 420ppm Point Estimate: %s", pe420_max)
+
+pe420_interval <- max(forecast420ppm$time_index) - min(forecast420ppm$time_index) 
+sprintf("Range of 420ppm Interval: %s", pe420_interval)
 
 forecast500ppm <-forecast_df %>%
  filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
 
-min(forecast500ppm$time_index) 
-max(forecast500ppm$time_index)
+pe500_min <- min(forecast500ppm$time_index) 
+sprintf("Earliest 500ppm Point Estimate: %s", pe500_min)
 
-max(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
+pe500_max <- max(forecast500ppm$time_index)
+sprintf("Latest 500ppm Point Estimate: %s", pe500_max)
+
+pe500_interval <- mmax(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
+sprintf("Range of 500ppm Interval: %s", pe500_interval)
 
 forecast500ppm <-forecast_df %>%
  filter(round(point_forecast,0) == 500 | round(lo_95,0) == 500 | round(high_95,0) == 500)
@@ -733,7 +741,7 @@ knitr::opts_chunk$set(dpi=1000)
 
 We now ask the question of whether the data collected from January 1998 to the present has different characteristics which could lead us to additional or different conclusions than those which the dataset from 1958 until 1997 yielded.
 
-We assume that the collection process for both datasets is identical.  On the website of the National Oceanic and Atmospheric Administration there is a note that the data collection process may have changed a
+Based on Keeling's autobiography, we know that there were differences between Keeling's data and the National Oceanic and Atmospheric Administration (NOAA) data until 1983, where they reconciled their measurements. However, despite this, we assume that the both datasets behave similarly. 
 
 It is worth noting that the "present" dataset contains only about 24 years, or 293 months, compared to the 39 years, or 468 months contained in the "1997" dataset.
 
@@ -860,7 +868,7 @@ The ACF displays a slow, over-time, decline consistent with a trending time seri
 
 The PACF of this time series has a strong postive spike a lag 1 followed by a pattern consistant with partial autocorrelation.
 
-Our histogram of has no values lower than 365, or nigher than 421, and that these values are not normally distributed.
+Our histogram of has no values lower than 365, or higher than 421, and that these values are not normally distributed.
 
 In order to better understand the differences between these two datasets we examine them side by side.
 
@@ -1224,7 +1232,7 @@ data_and_lm_prediction_overlay <- fit_quadratic_season %>%
 
 ```
 
-In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting model with polynomial terms and seasonality, model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
+In the top-left, we plot the 1998-present time series, next to it, we plot the prediction yielded by the best-fitting model with polynomial terms and seasonality, model we developed against the "1997" data set.  Beneath the two plots we overlay the original time series with the prediction.  Towards the middle of time series, the fit is nearly perfect.  At both the beginning and end of the time series, there are barely visible differences the prediction and the "real" underlying time series.  
 
 We predict 23 years from Dec 31, 1997, which means the predict values are through December 31 2021.  Our "present" time series contains data "through" May 2022, which means we have an addition 5 months of data, indicated by the solid black line extending upwards out of the prediction.
 
@@ -1286,11 +1294,7 @@ data_and_lm_prediction_overlay /
 
 ## Evaluate the performance of 1997 linear and ARIMA models
 
-In 1997 you made predictions about the first time that CO2 would cross 420 ppm. How close were your
-models to the truth?
-After reflecting on your performance on this threshold-prediction task, continue to use the weekly data to
-generate a month-average series from 1997 to the present, and compare the overall forecasting performance
-of your models from Parts 2a and 3b over the entire period. (You should conduct formal tests for this task.)
+From our present $CO_2$ data, we observe that the date that Mona Lua crossed 420 ppm was on April 25, 2021. When comparing these across the models in the 1997 report: in the `trend model`, it is forecasted that 420ppm will not be reached until December 2041, whereas the point forecast for the ARIMA model is April 2032. The `arima fit` also had a 95% confidence interval for 420ppm where lower bound is a very wide range of April 2022 and upper bound is December 2100. Concluding, our observed actual does not match what were forecasted in either of the models. Further, our observed date is also outside of the range of the confidence interval for their estimated ARIMA model. Let's next compute and observe the accuracies of both the linear model and ARIMA model that were estimated in 1997.
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 # display TS for atmospheric co2 for when we crossed 420ppm
@@ -1336,7 +1340,7 @@ sprintf("Lower bound forecast ARIMA: %s",min(forecast420ppm$time_index))
 sprintf("Upper bound forecast ARIMA: %s",max(forecast420ppm$time_index))
 ```
 
-From our present $CO_2$ data, we observe that the date that Mona Lua crossed 420 ppm was on April 25, 2021. When comparing these across the models in the 1997 report: in the `trend model`, it is forecasted that 420ppm will not be reached until December 2041, whereas the point forecast for the ARIMA model is April 2032. The `arima fit` also had a 95% confidence interval for 420ppm where lower bound is a very wide range of April 2022 and upper bound is December 2100. Concluding, our observed actual does not match what were forecasted in either of the models. Further, our observed date is also outside of the range of the confidence interval for their estimated ARIMA model. Let's next compute and observe the accuracies of both the linear model and ARIMA model that were estimated in 1997.
+
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 accuracy_lm

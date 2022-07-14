@@ -1649,11 +1649,6 @@ Here we observe the forecasted values as being very similar to that of the actua
 
 ## How bad could it get?
 
-With the non-seasonally adjusted data series, generate predictions for when atmospheric CO2 is expected
-to be at 420 ppm and 500 ppm levels for the first and final times (consider prediction intervals as well as
-point estimates in your answer). Generate a prediction for atmospheric CO2 levels in the year 2122. How
-confident are you that these will be accurate predictions?
-
 Next, the question arose from a colleague of whether our model could predict the first and final times that the $CO_2$ levels would be 420ppm and 500ppm, we figured in doing so we could forecast how high the $CO_2$ levels could reach with the current state of the world, according to the NSA model we've estimated.
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
@@ -1702,4 +1697,4 @@ nsa_forecast_df %>% filter_index("2122-01" ~ "2122-12")
 
 According to the dataframe displayed above, according to the NSA model forecasts in the year 2122 we'd expect to see CO2 levels of 654ppm to around 660ppm. The 95% confidence intervals float around 550ppm for the low bound and 765ppm for the high bound. This is evidence of a very wide confidence interval. Observing these forecasted CO2 levels is quite daunting to be honest, as a team we were very surprised to find that in just 100 years, the CO2 levels could potentially rise by more than 100ppm.
 
-It is interesting to note here that similar to the analysis done in the 1997 report, we have also estimate confidence intervals that are very wide. Based on this fact and combined with how this Keeling curve behaves, we conclude that we are not entirely confident our forecasts will accurate.
+It is interesting to note here that similar to the analysis done in the 1997 report, we have also estimate confidence intervals that are very wide. Based on this fact and combined with how this Keeling curve behaves, we conclude that we are not entirely confident our forecasts are accurate.

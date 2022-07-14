@@ -94,7 +94,7 @@ The histogram shows that the CO2 values seem to range between 300 and 380 ppm an
 
 Let's take a closer look at the seasonality in the data. We'll start by creating a season plot and a subseries plot of the data.
 
-```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=8}
+```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=6}
 seasons <- ggseasonplot(x = co2, year.labels=TRUE, year.labels.left=TRUE) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Seasonal plot: Monthly mean $CO_2$)'))
@@ -103,12 +103,11 @@ subseries <- ggsubseriesplot(x = co2) +
   ylab(TeX(r'($CO_2$ Parts per Million)')) +
   ggtitle(TeX(r'(Subseries plot: Monthly mean $CO_2$)'))
 
-seasons + subseries + plot_layout(design = "
-AAAAAA
-AAAAAA
-AAAAAA
-BBBBBB
-")
+seasons 
+```
+
+```{r echo = FALSE, message = FALSE, fig.width=5, fig.height=2}
+subseries
 ```
 
 From these plots, we can see that the CO2 levels appear to increase from January through May, then decrease from June through October, hitting a low in October, and then increase again from November through end of the year. The source report does mention that plants and soil absorbing and emitting CO2 could influence these measurements. A possible explanation could be that, in the colder months, we can expect higher CO2 levels as plants die off, and in the warmer months, we can expect lower CO2 levels as plants thrive. Of course, there is variability across the Northern Hemisphere in what counts as "colder" months and when plants thrive - for example, Hawaiian "winter" is temperate and plants can grow year round, so this could explain why the seasonal variability is slight across the year. We can again see the trend of CO2 levels increasing year by year, but the seasonality effect seems constant year after year without a noticeable increase in the magnitude of the fluctuations across years, again supporting an additive model.
@@ -127,6 +126,7 @@ year_agg_plot <- co2_df %>%
 year_agg_plot
 ```
 \newpage
+
 ### Removing trend and seasonal movements
 
 We can also use both additive and multiplicative decomposition to remove both the trend and seasonal movements from our dataset and confirm that the variance is stationary. The results from these decompositions are plotted below.
@@ -271,13 +271,16 @@ fit_quadratic_log_plot <- augment(fit_quadratic_log)%>%
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Log Quadratic Model / Log Mean $CO_2$ Levels)')) 
 
-grid.arrange(fit_quadratic_plot, fit_quadratic_log_plot, nrow = 1, ncol = 2)
+grid.arrange(fit_quadratic_plot, fit_quadratic_log_plot, nrow = 2, ncol = 1)
 ```
 
 From these plots, both models seem to do a similar job fitting the data. Next, let's examine the model residuals.
 
 ```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic %>% gg_tsresiduals() + labs(title = "Quadratic Residuals") 
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 fit_quadratic_log %>% gg_tsresiduals() + labs(title = "Log Quadratic Residuals") 
 ```
 
@@ -340,7 +343,7 @@ fit_quadratic_log_season_plot <- augment(fit_quadratic_log_season)%>%
   geom_line(aes(y = .fitted, colour = "Fitted")) +
   labs(y = "Time", title = TeX(r'(Log Quadratic Seasonal Model / Log Mean $CO_2$ Levels)')) 
 
-grid.arrange(fit_quadratic_season_plot, fit_quadratic_log_season_plot, nrow = 1, ncol = 2)
+grid.arrange(fit_quadratic_season_plot, fit_quadratic_log_season_plot, nrow = 2, ncol = 1)
 ```
 
 From these plots, both models seem to do a similar job fitting the data and, unlike the previous models we've seen, actually account for the seasonal "waves" in our plot and track them pretty closely. Next, let's examine the model residuals.
@@ -666,7 +669,7 @@ When we observe the residuals, we also notice that there are two significant spi
 
 #creating training data
 train <- co2_df %>% filter_index(. ~ "1989 Jan")
-train
+#train
 
 fit_arima <- train %>% model(ARIMA(value))
 report(fit_arima)
@@ -684,7 +687,6 @@ co2_fc  %>%
     title = "Forecasts for co2 levels"
   ) +
   guides(colour = guide_legend(title = "Forecast"))
-
 
 ```
 
@@ -1371,11 +1373,14 @@ nsa_co2_present_train <- co2_present_weekly_agg_monthly %>%
 Now that we have all of our necessary data, let's get to creating models for both. First let's assess the number of differences needed for the seasonally adjusted data to be stationary, since this data already has the season component stripped out, we know there are no seasonal differences needed. Let's also assess the acf and pacf. 
 
 Assessing the ACF and PACF plots below, the ACF has a slow decay while the PACF has a large spike at lag 1, indicating that this series has a unit root and that the process is of AR(1). 
+
+
 ```{r, echo=FALSE, message=FALSE}
 sa_acf <- ggAcf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted ACF")
 sa_pacf <- ggPacf(sa_co2_present_train$season_adjust, lag.max=(50)) + labs(title="Seasonally adjusted PACF")
 sa_acf / sa_pacf
 ```
+
 
 Next, we run a KPSS test to test for stationarity, and since the pvalue is smaller than 0.05 critical value, we know the data is not stationary. We then run ndiffs to check how many differences are needed to make the data stationary, which is 1. Let's next difference the data once and assess the ACF and PACFs again.
 ```{r, echo=FALSE, message=FALSE}
@@ -1407,6 +1412,7 @@ report(sa_arima_fit)
 Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift and without a seasonal-ARIMA process, we get an $AIC = 118$ and $BIC = 132$. Furthermore, the algorithmically chosen model gave an $ARIMA(0,1,1)(0,0,1)[12]$ model, which the automatic call includes a season-ARIMA component, with $AIC = 109$ and $BIC = 124$. In either models, we observe that the automatic model yields lower AIC and BIC values, which should lead us to choose $ARIMA(0,1,1)(0,0,1)[12]$. However, because we are using seasonally adjusted data we would like to carry forward with the model we have estimated $ARIMA(1,1,1)$ which does not contain seasonal components.
 
 Now that we have our model, let's check the residuals for stationarity.
+
 ```{r Resid TS and resid ACF, echo=FALSE, message=FALSE, warning=FALSE}
 sa_resid = residuals(sa_our_model)
 (autoplot(sa_resid) +  labs(title="Residual Plot SA Model")) /
@@ -1422,6 +1428,7 @@ From observing the residual plot, the data loosely resembles that of white noise
 Let's follow the same procedure above for the NSA data. Furthermore, we know there is a seasonal component to this data so let's see how many differences it will take for the data to become stationary. We will also observe the PACF and ACF plots of the NSA data.
 
 From the below metrics we've found that 1 non-seasonal difference and 1 seasonal difference is needed.
+
 ```{r, message=FALSE, echo=FALSE}
 nsa_co2_present_train %>%
   features(value, unitroot_ndiffs)
@@ -1429,6 +1436,7 @@ nsa_co2_present_train %>%
 nsa_co2_present_train %>%
   features(value, unitroot_nsdiffs)
 ```
+
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 nsa_co2_present_train <- nsa_co2_present_train %>% mutate(diffed = difference(value) %>% difference(lag=12))
 
@@ -1527,7 +1535,9 @@ data_and_arima_prediction_overlay1 <- nsa_co2_present_train %>%
     )
 ( real_test_values | prediction_on_test_values ) / 
 data_and_arima_prediction_overlay1
+```
 
+```{r echo = FALSE, message = FALSE, warning = FALSE}
 # compute predictions and assess accuracy
 # BASED ON VALUE
 # am here

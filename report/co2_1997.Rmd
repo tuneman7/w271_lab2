@@ -1347,7 +1347,7 @@ accuracy_lm
 accuracy_arima
 ```
 
-Within these accuracy measurements displayed we will choose to talk about RMSE for the remainder of this analysis. The RMSE, or Root Mean Squared Error is the standard deviati0on of the observed residauls and is used to measure the overall spread of residuals, and in our context will be used to assess the accuracy of our model fits. The RMSE of the `trend model` is `13.7` whereas the RMSE of the `arima fit` is `8.26`, concluding that the `arima fit` is the more accurate model of the two. Which is loosely true, though `arima fit` did not have confidence bounds for forecasted date of observed 420ppm, it still has a point estimate that is closer than that of the `trend model`.
+Within these accuracy measurements displayed we will choose to talk about RMSE for the remainder of this analysis. The RMSE, or Root Mean Squared Error is the standard deviation of the observed residauls and is used to measure the overall spread of residuals, and in our context will be used to assess the accuracy of our model fits. The RMSE of the `trend model` is `13.7` whereas the RMSE of the `arima fit` is `8.26`, concluding that the `arima fit` is the more accurate model of the two. Which is loosely true, though `arima fit` did not have confidence bounds for forecasted date of observed 420ppm, it still has a point estimate that is closer than that of the `trend model`.
 
 
 ## ARIMA modeling

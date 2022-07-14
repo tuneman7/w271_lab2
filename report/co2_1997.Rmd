@@ -1413,11 +1413,17 @@ sa_our_model = Arima(sa_co2_present_train$season_adjust,order=c(0,1,1), include.
 Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift and without a seasonal-ARIMA process, we get an $AIC = 118$ and $BIC = 132$. Furthermore, the algorithmically chosen model gave an $ARIMA(0,1,1)$ model with $AIC = 116$ and $BIC = 126$. In either models, we observe that the automatic ARIMA call yields lower AIC and BIC values, which leads us to choose $ARIMA(0,1,1)$ for the remainder of our analysis.
 
 Now that we have our model, let's check the residuals for stationarity.
+
 ```{r Resid TS and resid ACF, echo=FALSE, message=FALSE, warning=FALSE}
 sa_resid = residuals(sa_our_model)
-(autoplot(sa_resid) +  labs(title="Residual Plot SA Model")) /
+(autoplot(sa_resid) +  labs(title="Residual Plot SA Model")) 
+```
+
+```{r Resid TS and resid ACF1, echo=FALSE, message=FALSE, warning=FALSE}
+sa_resid = residuals(sa_our_model)
 (ggAcf(sa_resid) +  labs(title="ACF Plot SA Model"))
 ```
+
 
 ```{r box jung, echo=FALSE, message=FALSE, warning=FALSE}
 Box.test(sa_resid,lag=15, fitdf=0, type="Lj")

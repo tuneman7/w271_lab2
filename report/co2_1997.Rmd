@@ -643,7 +643,7 @@ sprintf("Earliest 500ppm Point Estimate: %s", pe500_min)
 pe500_max <- max(forecast500ppm$time_index)
 sprintf("Latest 500ppm Point Estimate: %s", pe500_max)
 
-pe500_interval <- mmax(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
+pe500_interval <- max(forecast500ppm$time_index) - min(forecast500ppm$time_index) 
 sprintf("Range of 500ppm Interval: %s", pe500_interval)
 
 forecast500ppm <-forecast_df %>%
@@ -1352,6 +1352,8 @@ Within these accuracy measurements displayed we will choose to talk about RMSE f
 
 ## ARIMA modeling
 
+To better understand our data and predictive modeling for atmospheric $CO_2$ and to further emulate the analysis done in the 1997 report, we will move forward with using monthly data for this time series analysis. Another reason for why we have chose this method of using monthly data, is because the predictability using monthly data is theoretically and historically more accurate, due to monthly data;s ability flatten variations and pick up seasonality more reliably, thus leading to forecasts that are more stable.
+
 Let's choose an ARIMA model to fit the present CO2 data from NOAA. First we will assess two datasets and two models, one dataset for seasonally adjusted data (SA) and one for non-sesonally adjusted data (NSA). Then, within both datasets, we will split the data into test and train sets with the last two years of data being the test set. Following the report from 1997 and observing the time series we have for our 1998-present data of $CO_2$ we will conclude with also applying linear differencing methods to our time series.
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
@@ -1437,6 +1439,16 @@ From observing the residual plot, the data loosely resembles that of white noise
 ### Non-seasonally adjusted data assessment
 
 Let's follow the same procedure above for the NSA data. Furthermore, we know there is a seasonal component to this data so let's see how many differences it will take for the data to become stationary. We will also observe the PACF and ACF plots of the NSA data.
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+
+nsa_acf <- ggAcf(nsa_co2_present_train$value, lag.max=(50)) + labs(title="Non seasonally adjusted ACF")
+nsa_pacf <- ggPacf(nsa_co2_present_train$value, lag.max=(50)) + labs(title="Non seasonally adjusted PACF")
+
+nsa_acf / nsa_pacf
+```
+
+According to the PACF plot of NSA data, we observe a spike at lag=1 with a slight spike at lag=2, this indicates an AR(1) process is needed for this data. Furthermore, the ACF of this data indicates a slow decay of spikes. Next let's test for the number of differences needed for NSA data.
 
 From the below metrics we've found that 1 non-seasonal difference and 1 seasonal difference is needed.
 
@@ -1596,7 +1608,7 @@ data_and_arima_prediction_overlay1 <- sa_co2_present_test1 %>%
 ( real_test_values | prediction_on_test_values ) / 
 data_and_arima_prediction_overlay1
 ```
-With the NSA data, we observe that the predicted values are very similar to the actual values, nearly 100% following the pattern that is observed in the actual data from Jan 2020 to May 2022. Conversely, with the predicted values of the model fitted to the SA data, we observe that the model does not perform as well and is not as accurate. It seems as though the predicted values are about a constant amount above the actual values of $CO_2$
+With the NSA data, we observe that the predicted values are very similar to the actual values, nearly 100% following the pattern that is observed in the actual data from Jan 2020 to May 2022. Conversely, with the predicted values of the model fitted to the SA data, we observe that the model does not perform as well and is not as accurate. It seems as though the predicted values are about a constant amount higher the actual values of $CO_2$
 
 And now, we will fit a polynomial time trend model to the seasonally adjusted series. Here are the cross validation metrics of the polynomial time trend model:
 ```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}

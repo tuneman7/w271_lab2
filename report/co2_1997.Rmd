@@ -1400,28 +1400,29 @@ sa_pacf <- ggPacf(sa_co2_present_train$sa_one_diff, lag.max=(50)) + labs(title="
 sa_acf / sa_pacf
 ```
 
-Looking at the SA differenced ACF and PACF, the significant spike at lag=1 in the ACF suggests a non-seasonal MA(1) component while the PACF yields no new information. Let's fit a couple of models to compare, one being an $ARIMA(1,1,1)$ and one that is automatically computed through the `ARIMA` func call.
+Looking at the SA differenced ACF and PACF, the significant spike at lag=1 in the ACF suggests a non-seasonal MA(1) component while the PACF yields no new information. Let's fit a couple of models to compare, one being an $ARIMA(1,1,1)$ and one that is automatically computed through the `ARIMA` func call while adjusting to assure the estimated model retains no seasonal components.
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 sa_our_model = Arima(sa_co2_present_train$season_adjust,order=c(1,1,1), include.drift=TRUE)
 sa_our_model
 
-sa_arima_fit = sa_co2_present_train %>% model(ARIMA(season_adjust))
+sa_arima_fit = sa_co2_present_train %>% model(ARIMA(season_adjust~PDQ(0,0,0)))
 report(sa_arima_fit)
+sa_our_model = Arima(sa_co2_present_train$season_adjust,order=c(0,1,1), include.drift=TRUE)
 ```
-Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift and without a seasonal-ARIMA process, we get an $AIC = 118$ and $BIC = 132$. Furthermore, the algorithmically chosen model gave an $ARIMA(0,1,1)(0,0,1)[12]$ model, which the automatic call includes a season-ARIMA component, with $AIC = 109$ and $BIC = 124$. In either models, we observe that the automatic model yields lower AIC and BIC values, which should lead us to choose $ARIMA(0,1,1)(0,0,1)[12]$. However, because we are using seasonally adjusted data we would like to carry forward with the model we have estimated $ARIMA(1,1,1)$ which does not contain seasonal components.
+Assessing the summaries from the model we chose to fit $ARIMA(1,1,1)$ with drift and without a seasonal-ARIMA process, we get an $AIC = 118$ and $BIC = 132$. Furthermore, the algorithmically chosen model gave an $ARIMA(0,1,1)$ model with $AIC = 116$ and $BIC = 126$. In either models, we observe that the automatic ARIMA call yields lower AIC and BIC values, which leads us to choose $ARIMA(0,1,1)$ for the remainder of our analysis.
 
 Now that we have our model, let's check the residuals for stationarity.
-
 ```{r Resid TS and resid ACF, echo=FALSE, message=FALSE, warning=FALSE}
 sa_resid = residuals(sa_our_model)
 (autoplot(sa_resid) +  labs(title="Residual Plot SA Model")) /
 (ggAcf(sa_resid) +  labs(title="ACF Plot SA Model"))
 ```
+
 ```{r box jung, echo=FALSE, message=FALSE, warning=FALSE}
 Box.test(sa_resid,lag=15, fitdf=0, type="Lj")
 ```
-From observing the residual plot, the data loosely resembles that of white noise, while the ACF of the residuals suggests that the data is stationary, with a small lag spike at lag=23 and the rest of the lags within the 95% bounds. Assessing the results from the Ljung-Box test, we have a p-value that is much larger than the 0.05 critical value leading us to fail to reject the null hypothesis and conclude that there is no serial correlation within our time series.
+From observing the residual plot, the data loosely resembles that of white noise, while the ACF of the residuals suggests that the data is stationary, with a small lag spike at lag=24 and the rest of the lags within the 95% bounds. Assessing the results from the Ljung-Box test, we have a p-value that is much larger than the 0.05 critical value leading us to fail to reject the null hypothesis and conclude that there is no serial correlation within our time series. As a note, it is interesting to observe the ACF in this case with lag=24, which indicates a seasonal MA(1) process remains, however, since we are to fit an ARIMA model to our seasonally adjusted time series, we will stay true to our subjugated methods.
 
 ### Non-seasonally adjusted data assessment
 
@@ -1473,7 +1474,7 @@ Box.test(nsa_resid,lag=15, fitdf=0, type="Lj")
 
 From the results of the ACF of residuals, we observe that all lags are within the significant 95% threshold which means it closely resembles that of a white noise. The time series plot of the residuals loosely resemble that of a white noise, with fluctuations floating around 0 and very rarely crossing 1 and -1. From the Ljung-Box test, we observe a p-value that is higher than 0.05 critical value, leading us to reject the null hypothesis and conclude that there is no correlation within our time series. 
 
-From these results we will continue with using $ARIMA(1,1,1)$ for our seasonally adjusted time series, and $ARIMA(1,1,2)(0,1,1)[12]$ for our non-seasonally adjusted time series.
+From these results we will continue with using $ARIMA(0,1,1)$ for our seasonally adjusted time series, and $ARIMA(1,1,2)(0,1,1)[12]$ for our non-seasonally adjusted time series.
 
 ### Assessing model accuracy
 
@@ -1587,21 +1588,54 @@ data_and_arima_prediction_overlay1
 ```
 With the NSA data, we observe that the predicted values are very similar to the actual values, nearly 100% following the pattern that is observed in the actual data from Jan 2020 to May 2022. Conversely, with the predicted values of the model fitted to the SA data, we observe that the model does not perform as well and is not as accurate. It seems as though the predicted values are about a constant amount above the actual values of $CO_2$
 
-
-And now, we will fit a polynomial time trend model to the seasonall adjusted series.
+And now, we will fit a polynomial time trend model to the seasonally adjusted series. Here are the cross validation metrics of the polynomial time trend model:
 ```{r, message=FALSE, echo=FALSE, warning=FALSE, warn = FALSE}
-
-sa_fit_quadratic <- sa_co2_present_train %>%
-  model(lm=TSLM(season_adjust ~ trend + I(trend^2)))
-
+sa_future_d1 <- select(sa_future_d,-old_model)
+sa_co2_present_train2 <- select(sa_co2_present_train, -.model)
+sa_fit_quadratic <- sa_co2_present_train2 %>%
+  model(lm=TSLM(season_adjust ~ trend() + I(trend()^2)))
 sa_fit_quadratic %>% report()
 
-# the forecast call is erring out :/
-#sa_quad_preds <- sa_fit_quadratic %>% forecast(new_datadata=future_d)
-#sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test$season_adjust)
+sa_quad_preds <- sa_fit_quadratic %>% forecast(new_data=sa_future_d1)
+sa_quad_acc = accuracy(sa_quad_preds, sa_co2_present_test)
+sa_quad_acc
 ```
-# TODO
+Observing the RMSE displayed above, we can see that the $RMSE=0.459$ is less than the RMSE for the ARIMA model fit on the SA data ($RMSE=0.54$), based on this observed metric we can conclude that the polynomial time trend model is the more accurate model of the two. And below are some descriptive analyses plots of the polynomial time trend model similar to those above, analysis of which shows an even more clear picture of predictability:
 
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+sa_co2_present_test1 <- select(sa_co2_present_test1,-old_model)
+sa_poly_series <- autoplot(my_sa_copy)  +
+    labs(
+      title = "Actual Time Series",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+
+sa_poly_preds <-
+   sa_quad_preds %>%
+    autoplot()  +
+    labs(
+      title = "Polynomial Time Trend Predictions",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+sa_poly_overlay <- 
+   sa_quad_preds %>%
+    autoplot(sa_co2_present_test1)  +
+    labs(
+      title = "Series, with Polynomial Prediction Overlay",
+      subtitle = "Season adjusted data",
+      x = 'Month and Year',
+      y = TeX(r'($CO_2$ parts per million)')
+    )
+( sa_poly_series | sa_poly_preds ) / 
+sa_poly_overlay
+
+```
+
+Here we observe the forecasted values as being very similar to that of the actual values within the test set, where nearly all of the actual predicted CO2 values are within the 80% threshold, and only a small subset of data in 2022 being outside of the 80% confidence range. We can conclude with these metrics and analyses that the polynomial time trend model is the better performant model and is more accurate model than the fitted ARIMA model.
 
 ## How bad could it get?
 
@@ -1646,6 +1680,7 @@ point_estimates = c(min(nsa_pe_420$time_index), min(nsa_pe_500$time_index))
 fcst_display_df = data.frame(CO2_levels, first_low, point_estimates, last_upper)
 fcst_display_df
 ```
+
 From our observed forecasts above, it looks like the point estimates for when CO2 levels reach 420ppm is Mar 2022 while the theoretical `first time` and `last time` this model forecasts to be 420ppm is April 2021 and May 2606 respectively (according to our 95% confidence interval). Whereas, the point estimates for when CO2 levels reach 500ppm is April 2055, while the theoretical `first time` and `last time` this model would forecast 500ppm is May 2047 and May 2529 respectively. 
 
 We'd also like to generate predictions of atmospheric CO2 levels for the year 2122:
